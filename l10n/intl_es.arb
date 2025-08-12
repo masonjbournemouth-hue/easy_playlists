@@ -1,0 +1,18 @@
+{
+  "@@locale": "es",
+  "appTitle": "Listas de Reproducción Fáciles",
+  "createPlaylist": "Crear Lista",
+  "addSongs": "Agregar Canciones",
+  "savePlaylist": "Guardar Lista",
+  "play": "Reproducir",
+  "pause": "Pausa",
+  "next": "Siguiente",
+  "previous": "Anterior",
+  "shuffle": "Aleatorio",
+  "loop": "Repetir",
+  "volumeEqualizer": "Ecualizador de Volumen",
+  "gaplessPlayback": "Reproducción sin pausas",
+  "exportPlaylist": "Exportar Lista",
+  "privacyPolicy": "Política de Privacidad",
+  "debugLog": "Registro de Depuración"
+}

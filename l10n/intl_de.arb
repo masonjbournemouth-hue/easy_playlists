@@ -1,0 +1,18 @@
+{
+  "@@locale": "de",
+  "appTitle": "Einfache Wiedergabelisten",
+  "createPlaylist": "Wiedergabeliste Erstellen",
+  "addSongs": "Lieder Hinzufügen",
+  "savePlaylist": "Wiedergabeliste Speichern",
+  "play": "Abspielen",
+  "pause": "Pause",
+  "next": "Nächste",
+  "previous": "Vorherige",
+  "shuffle": "Zufällig",
+  "loop": "Wiederholen",
+  "volumeEqualizer": "Lautstärke-Ausgleicher",
+  "gaplessPlayback": "Nahtlose Wiedergabe",
+  "exportPlaylist": "Wiedergabeliste Exportieren",
+  "privacyPolicy": "Datenschutzrichtlinie",
+  "debugLog": "Fehlerprotokoll"
+}

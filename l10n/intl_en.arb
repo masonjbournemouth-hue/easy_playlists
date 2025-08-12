@@ -1,0 +1,18 @@
+{
+  "@@locale": "en",
+  "appTitle": "Easy Playlists",
+  "createPlaylist": "Create Playlist",
+  "addSongs": "Add Songs",
+  "savePlaylist": "Save Playlist",
+  "play": "Play",
+  "pause": "Pause",
+  "next": "Next",
+  "previous": "Previous",
+  "shuffle": "Shuffle",
+  "loop": "Loop",
+  "volumeEqualizer": "Volume Equalizer",
+  "gaplessPlayback": "Gapless Playback",
+  "exportPlaylist": "Export Playlist",
+  "privacyPolicy": "Privacy Policy",
+  "debugLog": "Debug Log"
+}

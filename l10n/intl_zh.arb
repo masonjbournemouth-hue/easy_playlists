@@ -1,0 +1,18 @@
+{
+  "@@locale": "zh",
+  "appTitle": "轻松播放列表",
+  "createPlaylist": "创建播放列表",
+  "addSongs": "添加歌曲",
+  "savePlaylist": "保存播放列表",
+  "play": "播放",
+  "pause": "暂停",
+  "next": "下一首",
+  "previous": "上一首",
+  "shuffle": "随机播放",
+  "loop": "循环播放",
+  "volumeEqualizer": "音量均衡器",
+  "gaplessPlayback": "无缝播放",
+  "exportPlaylist": "导出播放列表",
+  "privacyPolicy": "隐私政策",
+  "debugLog": "调试日志"
+}

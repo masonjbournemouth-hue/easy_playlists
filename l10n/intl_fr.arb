@@ -1,0 +1,18 @@
+{
+  "@@locale": "fr",
+  "appTitle": "Listes de Lecture Faciles",
+  "createPlaylist": "Créer une Liste",
+  "addSongs": "Ajouter des Chansons",
+  "savePlaylist": "Enregistrer la Liste",
+  "play": "Lecture",
+  "pause": "Pause",
+  "next": "Suivant",
+  "previous": "Précédent",
+  "shuffle": "Mélanger",
+  "loop": "Répéter",
+  "volumeEqualizer": "Égaliseur de Volume",
+  "gaplessPlayback": "Lecture sans interruption",
+  "exportPlaylist": "Exporter la Liste",
+  "privacyPolicy": "Politique de Confidentialité",
+  "debugLog": "Journal de Débogage"
+}
