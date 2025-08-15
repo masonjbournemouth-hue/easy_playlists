@@ -46,10 +46,11 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Restore keystore from secret (into repo)
+      - name: Restore keystore from secret (into repo/android)
         run: |
-          # Put the JKS *inside the android folder* so Gradle can always find it
+          mkdir -p "$GITHUB_WORKSPACE/android"
           echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/android/easyplaylists.jks"
+          # Sanity check: file exists in the right place
           ls -l "$GITHUB_WORKSPACE/android/easyplaylists.jks"
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
