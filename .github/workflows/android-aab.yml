@@ -86,26 +86,21 @@ jobs:
           ls -la android || true
           ls -la android/app || true
 
-      - name: Show Gradle & AGP versions
+      - name: Print repo layout (debug)
         run: |
-          cd android
-          ./gradlew -v
-          ./gradlew tasks --all | sed -n '1,120p' || true
+          pwd
+          ls -la
+          ls -la android || true
+          ls -la android/app || true
 
-      - name: Build with Gradle (release, more logs)
-        run: |
-          cd android
-          # More headroom & clearer logs
-          export GRADLE_OPTS="-Dorg.gradle.jvmargs='-Xmx2g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8' -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
-          ./gradlew :app:bundleRelease \
-            --stacktrace --no-daemon --warning-mode all
-        env:
-          # Keep shrinkers off to reduce memory use
-          _NO_SHRINK: "1"
+      - name: Flutter doctor (debug info)
+        run: flutter doctor -v
+
+      - name: Build AAB (release, light flags)
+        run: flutter build appbundle --release --no-shrink --no-tree-shake-icons
 
       - name: Upload AAB artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
-          path: app/build/outputs/bundle/release/app-release.aab
+          path: build/app/outputs/bundle/release/app-release.aab
