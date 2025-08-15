@@ -17,12 +17,12 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.easy_playlists" // change later to your final package id
+    namespace = "com.easyplaylists.app" // change later to your final package id
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973" // matches CI workflow and plugins
 
     defaultConfig {
-        applicationId = "com.example.easy_playlists" // update to your final id (e.g., com.yourdomain.easyplaylists)
+        applicationId = "com.easyplaylists.app" // update to your final id (e.g., com.yourdomain.easyplaylists)
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
