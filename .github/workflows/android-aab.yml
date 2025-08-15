@@ -46,8 +46,11 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Restore keystore from secret
-        run: echo "$KEYSTORE_BASE64" | base64 -d > $HOME/easyplaylists.jks
+      - name: Restore keystore from secret (into repo)
+        run: |
+          # Put the JKS *inside the android folder* so Gradle can always find it
+          echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/android/easyplaylists.jks"
+          ls -l "$GITHUB_WORKSPACE/android/easyplaylists.jks"
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
@@ -57,8 +60,13 @@ jobs:
           storePassword=${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.KEY_PASSWORD }}
           keyAlias=${{ secrets.KEY_ALIAS }}
-          storeFile=${{ env.HOME }}/easyplaylists.jks
+          storeFile=${GITHUB_WORKSPACE}/android/easyplaylists.jks
           EOF
+          echo "----- key.properties (sanitized) -----"
+          sed -e 's/storePassword=.*/storePassword=****/' \
+              -e 's/keyPassword=.*/keyPassword=****/' \
+              -e 's@storeFile=.*@storeFile=(repo)/android/easyplaylists.jks@' \
+              android/key.properties
 
       # ----- Preflight checks -----
       - name: Verify keystore restored & passwords
