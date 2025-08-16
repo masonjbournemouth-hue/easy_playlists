@@ -41,19 +41,15 @@ jobs:
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0" \
-            "ndk;27.0.12077973"
+            "ndk;27.0.12077973" \
+            "cmake;3.22.1"
 
-      - name: Flutter pub get
-        run: flutter pub get
-
+      # --- Keystore & signing props (stored inside repo/android) ---
       - name: Restore keystore from secret (into repo/android)
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/android"
-          echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/android/easyplaylists.jks"
-          # Sanity check: file exists in the right place
-          ls -l "$GITHUB_WORKSPACE/android/easyplaylists.jks"
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          mkdir -p "${{ github.workspace }}/android"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "${{ github.workspace }}/android/easyplaylists.jks"
+          ls -l "${{ github.workspace }}/android/easyplaylists.jks"
 
       - name: Write android/key.properties
         run: |
@@ -61,7 +57,7 @@ jobs:
           storePassword=${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.KEY_PASSWORD }}
           keyAlias=${{ secrets.KEY_ALIAS }}
-          storeFile=${GITHUB_WORKSPACE}/android/easyplaylists.jks
+          storeFile=${{ github.workspace }}/android/easyplaylists.jks
           EOF
           echo "----- key.properties (sanitized) -----"
           sed -e 's/storePassword=.*/storePassword=****/' \
@@ -69,32 +65,7 @@ jobs:
               -e 's@storeFile=.*@storeFile=(repo)/android/easyplaylists.jks@' \
               android/key.properties
 
-      # ----- Preflight checks -----
-      - name: Verify keystore restored & passwords
-        run: |
-          ls -l $HOME/easyplaylists.jks
-          keytool -list -v -keystore $HOME/easyplaylists.jks -storepass "${{ secrets.KEYSTORE_PASSWORD }}" | sed -n '1,20p'
-
-      - name: Show sanitized key.properties
-        run: |
-          sed -e 's/storePassword=.*/storePassword=****/' \
-              -e 's/keyPassword=.*/keyPassword=****/' \
-              -e 's/storeFile=.*/storeFile=(redacted)/' \
-              android/key.properties || true
-      # ----------------------------
-
-      - name: Flutter doctor (debug info)
-        run: flutter doctor -v
-
-      - name: Print environment (debug)
-        run: |
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls -la $HOME
-          ls -la android || true
-          ls -la android/app || true
-
+      # --- Quick project sanity checks ---
       - name: Print repo layout (debug)
         run: |
           pwd
@@ -105,6 +76,7 @@ jobs:
       - name: Flutter doctor (debug info)
         run: flutter doctor -v
 
+      # --- Build the AAB with Flutter (keeps things simple) ---
       - name: Build AAB (release, light flags)
         run: flutter build appbundle --release --no-shrink --no-tree-shake-icons
 
