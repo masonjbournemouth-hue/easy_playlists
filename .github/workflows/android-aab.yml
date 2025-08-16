@@ -73,6 +73,21 @@ jobs:
           ls -la android || true
           ls -la android/app || true
 
+      - name: Preflight keystore check (storepass, alias, keypass)
+        run: |
+          set -e
+          echo "Checking store password..."
+          keytool -list -v \
+            -keystore "${{ github.workspace }}/android/easyplaylists.jks" \
+            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" | sed -n '1,20p'
+
+          echo "Checking alias and key password..."
+          keytool -list -v \
+            -keystore "${{ github.workspace }}/android/easyplaylists.jks" \
+            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+            -alias "${{ secrets.KEY_ALIAS }}" \
+            -keypass "${{ secrets.KEY_PASSWORD }}" | sed -n '1,20p'
+
       - name: Flutter doctor (debug info)
         run: flutter doctor -v
 
