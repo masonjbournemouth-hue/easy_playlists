@@ -1,4 +1,4 @@
-package com.example.easy_playlists
+package com.playlistcity.app
 
 import io.flutter.embedding.android.FlutterActivity
 
