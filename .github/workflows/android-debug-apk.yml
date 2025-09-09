@@ -1,0 +1,44 @@
+name: Android Debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "lib/**"
+      - "pubspec.yaml"
+      - "android/**"
+      - ".github/workflows/android-debug-apk.yml"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.8"
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Accept Android licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+
+      - name: Build debug APK (no shrink, no icon tree-shake)
+        run: flutter build apk --debug --no-shrink --no-tree-shake-icons
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
