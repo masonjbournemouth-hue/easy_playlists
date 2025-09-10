@@ -32,16 +32,25 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept SDK Licenses & Install Tools
-        shell: bash
-        run: |
-          yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --licenses
-          "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;34.0.0" \
-            "cmake;3.22.1" \
-            "ndk;27.0.12077973"
+- name: Accept SDK Licenses & Install Tools (tolerant)
+  shell: bash
+  run: |
+    set -e
+
+    # Accept licenses, but don't fail the job if 'yes' breaks the pipe.
+    set +e
+    yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --licenses
+    lic_status=$?
+    echo "sdkmanager --licenses exit code: ${lic_status} (will ignore non-zero)"
+    set -e
+
+    # Now install the required packages
+    "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" \
+      "platform-tools" \
+      "platforms;android-35" \
+      "build-tools;34.0.0" \
+      "cmake;3.22.1" \
+      "ndk;27.0.12077973"
 
       - name: Install Flutter (stable)
         uses: subosito/flutter-action@v2
