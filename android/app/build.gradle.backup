@@ -1,0 +1,57 @@
+// Apply plugins explicitly (instead of a plugins {} block)
+apply(plugin = "com.android.application")
+apply(plugin = "kotlin-android")
+apply(plugin = "dev.flutter.flutter-gradle-plugin")
+
+android {
+    namespace = "com.example.playlist_city"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    defaultConfig {
+        applicationId = "com.example.playlist_city"
+        minSdk = 21
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+
+        // Enable multidex support (fixes Dex merge errors)
+        multiDexEnabled = true
+    }
+
+    buildTypes {
+        release {
+            // Use real signing for Play Store; keep debug signing only for quick local tests.
+            // signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+        debug {
+            // Also enable multidex in debug just in case
+            isDebuggable = true
+        }
+    }
+
+    // Avoid duplicate META-INF file conflicts
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1"
+            )
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_11.toString()
+    }
+}
+
+dependencies {
+    implementation("androidx.multidex:multidex:2.0.1")
+}

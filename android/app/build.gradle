@@ -1,0 +1,54 @@
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'dev.flutter.flutter-gradle-plugin'
+}
+
+android {
+    namespace "com.example.playlist_city"
+    compileSdk flutter.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.example.playlist_city"
+        minSdk 21
+        targetSdk flutter.targetSdkVersion
+        versionCode flutter.versionCode
+        versionName flutter.versionName
+
+        // Fix Dex merge errors
+        multiDexEnabled true
+    }
+
+    buildTypes {
+        release {
+            // For Play Store builds, point to your real release signing.
+            // For now keep shrinkers off while we stabilize builds.
+            minifyEnabled false
+            shrinkResources false
+            // signingConfig signingConfigs.debug
+        }
+        debug {
+            debuggable true
+        }
+    }
+
+    // Java/Kotlin toolchains
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    kotlinOptions {
+        jvmTarget = '11'
+    }
+
+    // If you still hit META-INF conflicts, uncomment:
+    // packagingOptions {
+    //     resources {
+    //         excludes += ['META-INF/AL2.0','META-INF/LGPL2.1']
+    //     }
+    // }
+}
+
+dependencies {
+    implementation 'androidx.multidex:multidex:2.0.1'
+}
