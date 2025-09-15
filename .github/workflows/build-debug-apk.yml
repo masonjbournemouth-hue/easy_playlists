@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -29,26 +31,40 @@ jobs:
           java-version: "17"
           cache: gradle
 
+      # ✅ Install Android SDK + cmdline-tools + requested packages
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-34
+            build-tools;34.0.0
+            cmake;3.22.1
+            ndk;27.0.12077973
+
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Show Flutter env
+      - name: Show tool versions
         run: |
           flutter --version
           java -version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls -la "$ANDROID_SDK_ROOT"/cmdline-tools || true
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
-
-      - name: Flutter pub get
+      # We no longer call `sdkmanager --licenses` directly; the action handled installs.
+      - name: flutter pub get
         run: flutter pub get
 
-      - name: Build debug APK
+      - name: Build debug APK (ARM64 only, lighter)
         run: |
-          flutter build apk --debug --no-shrink --no-tree-shake-icons
+          flutter build apk --debug \
+            --target-platform=android-arm64 \
+            --no-shrink --no-tree-shake-icons
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
