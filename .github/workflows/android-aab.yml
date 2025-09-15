@@ -34,15 +34,39 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK (tools only)
         uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platform-tools
-            platforms;android-34
-            build-tools;34.0.0
-            cmake;3.22.1
-            ndk;27.0.12077973
+
+      - name: Install SDK/NDK packages (with retries)
+        shell: bash
+        run: |
+          set -e
+          echo "Accept licenses"
+          yes | sdkmanager --licenses || true
+
+          echo "Update sdkmanager"
+          sdkmanager --update || true
+
+          install_pkgs() {
+            sdkmanager \
+              "platform-tools" \
+              "platforms;android-34" \
+              "build-tools;34.0.0" \
+              "cmake;3.22.1" \
+              "ndk;27.0.12077973"
+          }
+
+          # retry up to 4 times in case of transient 5xx errors
+          n=0
+          until [ $n -ge 4 ]; do
+            install_pkgs && break
+            n=$((n+1))
+            echo "sdkmanager failed; retry $n/4 after short sleep…"
+            sleep 10
+          done
+
+          echo "Installed packages:"
+          sdkmanager --list | sed -n '1,120p'
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2
