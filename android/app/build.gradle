@@ -12,27 +12,36 @@ android {
         applicationId "com.example.playlist_city"
         minSdk 21
         targetSdk flutter.targetSdkVersion
-        versionCode flutter.versionCode
+
+        // versioning (use VERSION_CODE from CI or fallback locally)
+        versionCode Integer.valueOf(System.getenv("VERSION_CODE") ?: "2")
         versionName flutter.versionName
 
-        // Fix Dex merge errors
+        // multidex to prevent dex errors
         multiDexEnabled true
+    }
+
+    signingConfigs {
+        release {
+            // GitHub Actions will inject these with secrets
+            storeFile file(System.getenv("ANDROID_KEYSTORE") ?: "release-keystore.jks")
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "debugpassword"
+            keyAlias System.getenv("KEY_ALIAS") ?: "debug"
+            keyPassword System.getenv("KEY_PASSWORD") ?: "debugpassword"
+        }
     }
 
     buildTypes {
         release {
-            // For Play Store builds, point to your real release signing.
-            // For now keep shrinkers off while we stabilize builds.
+            signingConfig signingConfigs.release
             minifyEnabled false
             shrinkResources false
-            // signingConfig signingConfigs.debug
         }
         debug {
             debuggable true
         }
     }
 
-    // Java/Kotlin toolchains
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
@@ -40,13 +49,6 @@ android {
     kotlinOptions {
         jvmTarget = '11'
     }
-
-    // If you still hit META-INF conflicts, uncomment:
-    // packagingOptions {
-    //     resources {
-    //         excludes += ['META-INF/AL2.0','META-INF/LGPL2.1']
-    //     }
-    // }
 }
 
 dependencies {
