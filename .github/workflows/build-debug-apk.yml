@@ -1,4 +1,4 @@
-name: Android Debug APK
+name: Android Play Bundle
 
 on:
   workflow_dispatch:
@@ -8,15 +8,20 @@ on:
       - "android/**"
       - "lib/**"
       - "pubspec.yaml"
-      - ".github/workflows/build-debug-apk.yml"
+      - ".github/workflows/android-aab.yml"
 
 jobs:
-  build-debug:
+  build-aab:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+
     env:
-      JAVA_TOOL_OPTIONS: "-Xmx1g -XX:MaxMetaspaceSize=384m"
-      _JAVA_OPTIONS: "-Xmx1g"
+      # pass secrets into the environment Gradle/Flutter will read
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      # where we will write the decoded JKS
+      ANDROID_KEYSTORE: ${{ github.workspace }}/android/app/release-keystore.jks
 
     steps:
       - name: Checkout
@@ -31,8 +36,7 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # ✅ Install Android SDK + cmdline-tools + requested packages
-      - name: Set up Android SDK
+      - name: Install Android SDK (platform/ndk/cmake/tools)
         uses: android-actions/setup-android@v3
         with:
           packages: |
@@ -42,32 +46,28 @@ jobs:
             cmake;3.22.1
             ndk;27.0.12077973
 
-      - name: Install Flutter
+      - name: Decode and place keystore
+        shell: bash
+        run: |
+          mkdir -p android/app
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$ANDROID_KEYSTORE"
+          chmod 600 "$ANDROID_KEYSTORE"
+          ls -l "$ANDROID_KEYSTORE"
+
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Show tool versions
-        run: |
-          flutter --version
-          java -version
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          ls -la "$ANDROID_SDK_ROOT"/cmdline-tools || true
-
-      # We no longer call `sdkmanager --licenses` directly; the action handled installs.
-      - name: flutter pub get
+      - name: Flutter pub get
         run: flutter pub get
 
-      - name: Build debug APK (ARM64 only, lighter)
-        run: |
-          flutter build apk --debug \
-            --target-platform=android-arm64 \
-            --no-shrink --no-tree-shake-icons
+      - name: Build AAB (release, no shrink)
+        run: flutter build appbundle --release --no-shrink
 
-      - name: Upload APK artifact
+      - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: app-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
