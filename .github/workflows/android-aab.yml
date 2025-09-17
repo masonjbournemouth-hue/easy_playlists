@@ -12,14 +12,14 @@ on:
 
 jobs:
   build-aab:
+    name: Build Signed AAB
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      # Give Java/Gradle more headroom on the runner
-      JAVA_TOOL_OPTIONS: "-Xmx3g -XX:MaxMetaspaceSize=768m"
-      _JAVA_OPTIONS: "-Xmx3g -XX:MaxMetaspaceSize=768m"
-      # Flutter can be chatty with RAM during gen/build
-      GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' -Dkotlin.daemon.jvm.options='-Xmx1g -XX:MaxMetaspaceSize=512m'"
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      JAVA_TOOL_OPTIONS: "-Xmx2g -XX:MaxMetaspaceSize=512m"
 
     steps:
       - name: Checkout
@@ -34,80 +34,57 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK (tools only)
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install SDK/NDK packages (with retries)
-        shell: bash
+      - name: Install required SDK packages
         run: |
-          set -e
-          echo "Accept licenses"
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;34.0.0" \
+            "cmake;3.22.1" \
+            "ndk;27.0.12077973" || true
           yes | sdkmanager --licenses || true
 
-          echo "Update sdkmanager"
-          sdkmanager --update || true
-
-          install_pkgs() {
-            sdkmanager \
-              "platform-tools" \
-              "platforms;android-34" \
-              "build-tools;34.0.0" \
-              "cmake;3.22.1" \
-              "ndk;27.0.12077973"
-          }
-
-          # retry up to 4 times in case of transient 5xx errors
-          n=0
-          until [ $n -ge 4 ]; do
-            install_pkgs && break
-            n=$((n+1))
-            echo "sdkmanager failed; retry $n/4 after short sleep…"
-            sleep 10
-          done
-
-          echo "Installed packages:"
-          sdkmanager --list | sed -n '1,120p'
-
-      - name: Install Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Show tool versions
+      - name: Decode keystore to android/app/release-keystore.jks
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          flutter --version
-          java -version
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "ERROR: KEYSTORE_BASE64 secret is missing"; exit 1
+          fi
+          mkdir -p android/app
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
+          test -s android/app/release-keystore.jks || { echo "Decoded JKS is empty"; exit 1; }
 
-      # Make Gradle conservative (single worker, no daemon) and disable shrinkers
-      - name: Write CI gradle.properties
+      - name: Sanity check keystore (does not print secrets)
         run: |
-          cat > android/gradle.properties <<'PROPS'
-          org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8
-          org.gradle.workers.max=1
-          org.gradle.daemon=false
-          org.gradle.unsafe.configuration-cache=false
-          android.useAndroidX=true
-          android.enableJetifier=false
-          kotlin.daemon.jvmargs=-Xmx1g -XX:MaxMetaspaceSize=512m
-          PROPS
-          echo "wrote android/gradle.properties:"
-          cat android/gradle.properties
+          keytool -list -keystore android/app/release-keystore.jks \
+            -alias "$KEY_ALIAS" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" >/dev/null \
+          || (echo "Keystore/alias/passwords did not match" && exit 1)
 
-      - name: flutter pub get
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Flutter pub get
         run: flutter pub get
 
-      # ✅ Build the AAB with reduced memory pressure
-      #    (no shrinking, no icon tree-shake; limit ABIs to arm64 for now)
-      - name: Build AAB (release)
+      - name: Build signed AAB (release)
+        env:
+          CI: "true"
         run: |
-          flutter build appbundle \
-            --release \
-            --no-shrink \
-            --no-tree-shake-icons \
-            --target-platform=android-arm64
+          printf '%s\n' \
+            'org.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8' \
+            'org.gradle.workers.max=1' \
+            'org.gradle.daemon=false' \
+            'android.useAndroidX=true' \
+            'android.enableJetifier=false' \
+            > android/gradle.properties
+          flutter build appbundle --release --no-shrink --verbose
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
