@@ -5,36 +5,46 @@ plugins {
 }
 
 android {
-    namespace "com.example.playlist_city"
+    namespace "com.example.playlist_city" // keep your real namespace
     compileSdk flutter.compileSdkVersion
 
     defaultConfig {
-        applicationId "com.example.playlist_city"
+        applicationId "com.example.playlist_city" // keep your real ID
         minSdk 21
         targetSdk flutter.targetSdkVersion
-
-        // versioning (use VERSION_CODE from CI or fallback locally)
-        versionCode Integer.valueOf(System.getenv("VERSION_CODE") ?: "2")
+        versionCode flutter.versionCode
         versionName flutter.versionName
-
-        // multidex to prevent dex errors
         multiDexEnabled true
     }
 
     signingConfigs {
         release {
-            // GitHub Actions will inject these with secrets
-            storeFile file(System.getenv("ANDROID_KEYSTORE") ?: "release-keystore.jks")
-            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "debugpassword"
-            keyAlias System.getenv("KEY_ALIAS") ?: "debug"
-            keyPassword System.getenv("KEY_PASSWORD") ?: "debugpassword"
+            // Prefer key.properties when present (local builds),
+            // BUT in CI we’ll override via env (see workflow below)
+            def propsFile = rootProject.file("key.properties")
+            if (propsFile.exists()) {
+                def p = new Properties()
+                p.load(new FileInputStream(propsFile))
+                storeFile file(p['storeFile'])
+                storePassword p['storePassword']
+                keyAlias p['keyAlias']
+                keyPassword p['keyPassword']
+            } else {
+                // CI path – uses env provided by GitHub Actions
+                if (System.getenv("CI") == "true") {
+                    storeFile file("$rootDir/app/release-keystore.jks")
+                    storePassword System.getenv("KEYSTORE_PASSWORD")
+                    keyAlias System.getenv("KEY_ALIAS")
+                    keyPassword System.getenv("KEY_PASSWORD")
+                }
+            }
         }
     }
 
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
+            minifyEnabled false       // keep off until you’re ready to shrink
             shrinkResources false
         }
         debug {
@@ -46,9 +56,7 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = '11'
-    }
+    kotlinOptions { jvmTarget = '11' }
 }
 
 dependencies {
