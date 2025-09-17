@@ -34,18 +34,16 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK + install packages
         uses: android-actions/setup-android@v3
-
-      - name: Install required SDK packages
-        run: |
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;34.0.0" \
-            "cmake;3.22.1" \
-            "ndk;27.0.12077973" || true
-          yes | sdkmanager --licenses || true
+        with:
+          accept-licenses: true
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
+            cmake;3.22.1
+            ndk;27.0.12077973
 
       - name: Decode keystore to android/app/release-keystore.jks
         shell: bash
