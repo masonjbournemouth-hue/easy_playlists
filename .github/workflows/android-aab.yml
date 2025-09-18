@@ -28,11 +28,11 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # Only set ANDROID_SDK_ROOT — we will install packages ourselves
+      # Important: no 'packages:' here — just sets ANDROID_SDK_ROOT and installs cmdline-tools
       - name: Setup Android SDK (tooling only)
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK packages (explicit, one-per-arg)
         run: |
           sdkmanager --version
           yes | sdkmanager --licenses || true
@@ -42,9 +42,10 @@ jobs:
             "build-tools;34.0.0" \
             "cmake;3.22.1" \
             "ndk;27.0.12077973"
-          echo "Installed packages:"
-          ls -la "$ANDROID_SDK_ROOT" || true
+          echo "Installed:"
           ls -la "$ANDROID_SDK_ROOT/ndk" || true
+          ls -la "$ANDROID_SDK_ROOT/platforms" || true
+          ls -la "$ANDROID_SDK_ROOT/build-tools" || true
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -52,10 +53,10 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Flutter pub get
+      - name: flutter pub get
         run: flutter pub get
 
-      - name: Decode keystore from secret
+      - name: Decode keystore
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -70,9 +71,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          ./gradlew --no-daemon \
-            -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m" \
-            bundleRelease
+          ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m" bundleRelease
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
