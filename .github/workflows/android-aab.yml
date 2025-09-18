@@ -28,25 +28,23 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # ✅ Correct multi-line package list (no extra quotes!)
-      - name: Setup Android SDK
+      # Only set ANDROID_SDK_ROOT — we will install packages ourselves
+      - name: Setup Android SDK (tooling only)
         uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platform-tools
-            platforms;android-34
-            build-tools;34.0.0
-            cmake;3.22.1
-            ndk;27.0.12077973
 
-      # Optional: quick sanity checks
-      - name: Show SDK tools
+      - name: Install Android SDK packages
         run: |
           sdkmanager --version
-          ls -la $ANDROID_SDK_ROOT
-          ls -la $ANDROID_SDK_ROOT/ndk
-
-          echo y | sdkmanager --licenses >/dev/null || true
+          yes | sdkmanager --licenses || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "cmake;3.22.1" \
+            "ndk;27.0.12077973"
+          echo "Installed packages:"
+          ls -la "$ANDROID_SDK_ROOT" || true
+          ls -la "$ANDROID_SDK_ROOT/ndk" || true
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -57,7 +55,6 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      # Provide keystore via env and write it to disk
       - name: Decode keystore from secret
         shell: bash
         env:
