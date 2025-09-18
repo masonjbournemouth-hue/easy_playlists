@@ -1,4 +1,4 @@
-name: Android Play Bundle
+name: Android Play Bundle (minimal)
 
 on:
   workflow_dispatch:
@@ -28,22 +28,25 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # Important: no 'packages:' here — just sets ANDROID_SDK_ROOT and installs cmdline-tools
+      # No packages list here (that caused your earlier failures)
       - name: Setup Android SDK (tooling only)
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages (explicit, one-per-arg)
+      - name: Ensure cmdline-tools on PATH
+        run: |
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Install Android SDK packages (explicit)
+        shell: bash
         run: |
           sdkmanager --version
-          yes | sdkmanager --licenses || true
-          sdkmanager \
+          yes | sdkmanager --licenses --sdk_root="$ANDROID_SDK_ROOT" || true
+          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
             "platform-tools" \
             "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "cmake;3.22.1" \
-            "ndk;27.0.12077973"
-          echo "Installed:"
-          ls -la "$ANDROID_SDK_ROOT/ndk" || true
+            "build-tools;34.0.0"
+          echo "SDK content:"
           ls -la "$ANDROID_SDK_ROOT/platforms" || true
           ls -la "$ANDROID_SDK_ROOT/build-tools" || true
 
@@ -56,25 +59,24 @@ jobs:
       - name: flutter pub get
         run: flutter pub get
 
+      # Decode your keystore from secrets to android/app/release-keystore.jks
       - name: Decode keystore
-        shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
+          test -n "$KEYSTORE_BASE64"
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
           ls -l android/app/release-keystore.jks
 
+      # Build the signed AAB via Flutter (uses your key.properties/signingConfigs)
       - name: Build AAB (release, signed)
-        working-directory: android
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          _JAVA_OPTIONS: "-Xmx2g -XX:MaxMetaspaceSize=512m"
         run: |
-          ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m" bundleRelease
+          flutter build appbundle --release --no-shrink
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: build/app/outputs/bundle/release/app-release.aab
