@@ -28,27 +28,18 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # No packages list here (that caused your earlier failures)
-      - name: Setup Android SDK (tooling only)
-        uses: android-actions/setup-android@v3
+- name: Set up Android SDK
+  uses: android-actions/setup-android@v3
+  with:
+    packages: |
+      platform-tools
+      platforms;android-34
+      build-tools;34.0.0
+      cmake;3.22.1
+      ndk;27.0.12077973
 
-      - name: Ensure cmdline-tools on PATH
-        run: |
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
-
-      - name: Install Android SDK packages (explicit)
-        shell: bash
-        run: |
-          sdkmanager --version
-          yes | sdkmanager --licenses --sdk_root="$ANDROID_SDK_ROOT" || true
-          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0"
-          echo "SDK content:"
-          ls -la "$ANDROID_SDK_ROOT/platforms" || true
-          ls -la "$ANDROID_SDK_ROOT/build-tools" || true
+- name: Accept licenses
+  run: yes | sdkmanager --licenses
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
