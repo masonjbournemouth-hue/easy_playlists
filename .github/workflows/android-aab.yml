@@ -59,14 +59,58 @@ jobs:
       - name: flutter pub get
         run: flutter pub get
 
-      # Decode your keystore from secrets to android/app/release-keystore.jks
-      - name: Decode keystore
+      - name: Check required secrets present
+        run: |
+          test -n "${{ secrets.KEYSTORE_BASE64 }}" || (echo "Missing KEYSTORE_BASE64" && exit 1)
+          test -n "${{ secrets.KEYSTORE_PASSWORD }}" || (echo "Missing KEYSTORE_PASSWORD" && exit 1)
+          test -n "${{ secrets.KEY_ALIAS }}" || (echo "Missing KEY_ALIAS" && exit 1)
+          test -n "${{ secrets.KEY_PASSWORD }}" || (echo "Missing KEY_PASSWORD" && exit 1)
+          echo "All required secrets are present."
+
+      - name: Decode keystore (JKS)
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          test -n "$KEYSTORE_BASE64"
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
           ls -l android/app/release-keystore.jks
+
+      - name: Verify keystore opens with passwords + alias
+        env:
+          STOREPASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          # Check store password (won’t print contents)
+          keytool -list -keystore android/app/release-keystore.jks -storepass "$STOREPASS" >/dev/null || (echo "Keystore password invalid" && exit 1)
+          # Check alias exists
+          keytool -list -keystore android/app/release-keystore.jks -storepass "$STOREPASS" -alias "$ALIAS" >/dev/null || (echo "Alias '$ALIAS' not found in keystore" && exit 1)
+          echo "Keystore + alias look good."
+
+      - name: Write key.properties from secrets
+        env:
+          STOREPASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYPASS: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          cat > android/app/key.properties <<EOF
+          storeFile=release-keystore.jks
+          storePassword=${STOREPASS}
+          keyAlias=${ALIAS}
+          keyPassword=${KEYPASS}
+          EOF
+          echo "key.properties written."
+
+      - name: Build AAB (release, signed)
+        env:
+          _JAVA_OPTIONS: "-Xmx2g -XX:MaxMetaspaceSize=512m"
+        run: |
+          flutter pub get
+          flutter build appbundle --release --no-shrink
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
 
       # Build the signed AAB via Flutter (uses your key.properties/signingConfigs)
       - name: Build AAB (release, signed)
