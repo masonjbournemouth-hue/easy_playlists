@@ -14,7 +14,12 @@ jobs:
   build-aab:
     name: Build Signed AAB
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
+
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      JAVA_HOME_17_X64: /usr/lib/jvm/temurin-17-jdk-amd64
 
     steps:
       - name: Checkout
@@ -32,38 +37,47 @@ jobs:
         with:
           flutter-version: "3.24.3"
 
-      - name: Install Android packages (manual)
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      # Manual Android SDK bootstrap (no third-party setup-android action)
+      - name: Install Android cmdline-tools
         run: |
-          set -e
-          yes | "${ANDROID_SDK_ROOT}/cmdline-tools/16.0/bin/sdkmanager" --sdk_root="${ANDROID_SDK_ROOT}" "cmdline-tools;latest" || true
-          SDKMGR="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMGR" --sdk_root="${ANDROID_SDK_ROOT}" \
+          set -euxo pipefail
+          mkdir -p "$ANDROID_SDK_ROOT"
+          cd "$ANDROID_SDK_ROOT"
+          curl -L -o cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q cmdtools.zip
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          # After unzip, folder is usually "cmdline-tools"
+          mv cmdline-tools/* "$ANDROID_SDK_ROOT/cmdline-tools/latest/" || true
+          rm -f cmdtools.zip
+
+      - name: Install SDK/NDK packages
+        run: |
+          set -euxo pipefail
+          SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses
+          yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" \
             "platform-tools" \
             "platforms;android-34" \
             "build-tools;34.0.0" \
             "cmake;3.22.1" \
             "ndk;27.0.12077973"
 
-      - name: Accept licenses
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-        run: yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+      - name: Flutter pub get
+        run: flutter pub get
 
-      - name: Decode Keystore
+      - name: Decode keystore
         run: echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      - name: Build AAB
+      - name: Build signed AAB
         run: flutter build appbundle --release
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Upload AAB
+      - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
