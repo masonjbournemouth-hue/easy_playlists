@@ -39,32 +39,9 @@ jobs:
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
           cd "$ANDROID_SDK_ROOT/cmdline-tools"
 
-          # Download recent cmdline-tools
-          curl -L -o tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip"
-          unzip -q tools.zip -d latest
-          rm -f tools.zip
+          # Download cmdline-tools
+          curl -L -o tools.zip "https://dl.google.com/android/repository
 
-          # Resolve sdkmanager path (Google's zip sometimes nests 'cmdline-tools/')
-          if [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-            SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          elif [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin/sdkmanager" ]; then
-            SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin/sdkmanager"
-          else
-            echo "sdkmanager not found after unzip" >&2
-            find "$ANDROID_SDK_ROOT/cmdline-tools" -maxdepth 3 -type f -name sdkmanager || true
-            exit 127
-          fi
-
-          export PATH="$(dirname "$SDKMGR"):$ANDROID_SDK_ROOT/platform-tools:$PATH"
-
-          yes | "$SDKMGR" --licenses
-
-          # Install each package in its own call (avoids multi-line parse bug)
-          "$SDKMGR" "platform-tools"
-          "$SDKMGR" "platforms;android-34"
-          "$SDKMGR" "build-tools;34.0.0"
-          "$SDKMGR" "cmake;3.22.1"
-          "$SDKMGR" "ndk;27.0.12077973"
 
       - name: Restore keystore from secret
         shell: bash
