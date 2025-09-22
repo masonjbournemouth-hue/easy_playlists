@@ -14,7 +14,7 @@ jobs:
   build-aab:
     name: Build Release AAB
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 65
 
     steps:
       - name: Checkout
@@ -29,34 +29,54 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Install Android SDK manually
+      - name: Install Android SDK (manual)
+        shell: bash
         run: |
           set -euxo pipefail
-          mkdir -p "$HOME/android-sdk/cmdline-tools"
-          cd "$HOME/android-sdk/cmdline-tools"
-          curl -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
+
+          export ANDROID_SDK_ROOT="$HOME/android-sdk"
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          cd "$ANDROID_SDK_ROOT/cmdline-tools"
+
+          # Download a recent cmdline-tools (16.x)
+          curl -L -o tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip"
           unzip -q tools.zip -d latest
-          rm tools.zip
-          export ANDROID_HOME=$HOME/android-sdk
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+          rm -f tools.zip
+
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+
           yes | sdkmanager --licenses
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "cmake;3.22.1" \
-            "ndk;27.0.12077973"
 
-      - name: Decode Keystore
+          # Install each package in its own invocation (avoids the multi-line parse issue)
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-34"
+          sdkmanager "build-tools;34.0.0"
+          sdkmanager "cmake;3.22.1"
+          sdkmanager "ndk;27.0.12077973"
+
+      - name: Restore keystore from secret
+        shell: bash
         run: |
+          set -euxo pipefail
+          test -n "$KEYSTORE_BASE64"
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
+          ls -lh android/app/release-keystore.jks
 
-      - name: Build Release AAB
+      - name: Build signed AAB
+        shell: bash
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
-          export ANDROID_HOME=$HOME/android-sdk
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          ./gradlew bundleRelease
+          set -euxo pipefail
+          ./gradlew --no-daemon --stacktrace \
+            -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" \
+            bundleRelease
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
