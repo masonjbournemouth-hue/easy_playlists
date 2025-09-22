@@ -14,6 +14,7 @@ jobs:
   build-aab:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -40,7 +41,16 @@ jobs:
           channel: stable
           cache: true
 
-      # --- Install Android SDK manually & accept licenses ---
+      # --- Debug: show PATH and any sdkmanager on PATH (should be none we use) ---
+      - name: Debug PATH and sdkmanager
+        shell: bash
+        run: |
+          set -eux
+          echo "PATH=$PATH"
+          command -v sdkmanager || true
+          ls -la /usr/local/lib/android/sdk/cmdline-tools || true
+
+      # --- Install Android SDK manually (isolated in $GITHUB_WORKSPACE/android-sdk) ---
       - name: Install Android SDK (manual)
         shell: bash
         run: |
@@ -51,7 +61,7 @@ jobs:
           mkdir -p latest
           unzip -q cmdline-tools.zip -d latest
           rm cmdline-tools.zip
-          echo "SDK manager is at: ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --version
 
       - name: Accept licenses
         shell: bash
@@ -59,7 +69,7 @@ jobs:
           set -euxo pipefail
           yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --sdk_root="${ANDROID_SDK_ROOT}" --licenses || true
 
-      - name: Install required SDK packages
+      - name: Install required SDK packages (each as its own arg)
         shell: bash
         run: |
           set -euxo pipefail
@@ -70,28 +80,20 @@ jobs:
             "cmake;3.22.1" \
             "ndk;27.0.12077973"
 
-      # --- Recreate keystore from secrets ---
-      - name: Restore keystore from secrets
+      # --- Restore keystore from secrets ---
+      - name: Restore keystore
         if: env.KEYSTORE_BASE64 != ''
         shell: bash
         run: |
           set -euxo pipefail
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
           ls -l android/app/release-keystore.jks
-
-      # (Optional) sanity check the alias exists
-      - name: Show keystore alias (sanity check)
-        if: env.KEYSTORE_BASE64 != ''
-        shell: bash
-        run: |
-          set -euxo pipefail
           keytool -list -v -keystore android/app/release-keystore.jks -storepass "$KEYSTORE_PASSWORD" | grep -E "Alias name|Entry type" || true
 
-      # --- Build AAB (release) ---
-      - name: Flutter pub get
+      - name: flutter pub get
         run: flutter pub get
 
-      - name: Build AAB
+      - name: Build AAB (release)
         env:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         run: |
