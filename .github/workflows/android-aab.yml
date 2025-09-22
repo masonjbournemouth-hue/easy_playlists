@@ -12,17 +12,9 @@ on:
 
 jobs:
   build-aab:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 70
-
-    env:
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      JAVA_HOME_17_X64: /usr/lib/jvm/temurin-17-jdk-amd64
-      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+    name: Build Release AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -37,95 +29,37 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Make sure preinstalled Android SDK is not used
-        shell: bash
-        run: |
-          set -eux
-          echo "Original PATH: $PATH"
-          # Remove common preinstalled Android SDK dirs from PATH so we never use the wrong sdkmanager
-          CLEAN_PATH=$(echo "$PATH" | tr ':' '\n' | grep -v '^/usr/local/lib/android/sdk' | paste -sd:)
-          echo "PATH=$CLEAN_PATH" >> $GITHUB_ENV
-          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-
-      - name: Install Android cmdline-tools (local, pinned)
-        shell: bash
+      - name: Install Android SDK manually
         run: |
           set -euxo pipefail
-          mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools"
-          cd "${ANDROID_SDK_ROOT}/cmdline-tools"
-          curl -L -o cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip"
-          mkdir -p latest
-          unzip -q cmdline-tools.zip -d latest
-          rm cmdline-tools.zip
-          "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --version
-
-      - name: Accept Android licenses (retry)
-        shell: bash
-        run: |
-          set -euxo pipefail
-          for i in 1 2 3; do
-            yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --sdk_root="${ANDROID_SDK_ROOT}" --licenses && break || sleep 5
-          done
-
-      - name: Install required SDK packages (each as its own arg, retry)
-        shell: bash
-        run: |
-          set -euxo pipefail
-          PKGS=(
-            "platform-tools"
-            "platforms;android-35"
-            "build-tools;34.0.0"
-            "cmake;3.22.1"
+          mkdir -p "$HOME/android-sdk/cmdline-tools"
+          cd "$HOME/android-sdk/cmdline-tools"
+          curl -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
+          unzip -q tools.zip -d latest
+          rm tools.zip
+          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+          yes | sdkmanager --licenses
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "cmake;3.22.1" \
             "ndk;27.0.12077973"
-          )
-          for i in 1 2 3; do
-            "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --sdk_root="${ANDROID_SDK_ROOT}" "${PKGS[@]}" && break || sleep 10
-          done
-          "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --sdk_root="${ANDROID_SDK_ROOT}" --list | head -n 100 || true
 
-      - name: Restore keystore from secrets and sanity-check
-        if: env.KEYSTORE_BASE64 != ''
-        shell: bash
+      - name: Decode Keystore
         run: |
-          set -euxo pipefail
-          # Decode JKS
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
-          ls -l android/app/release-keystore.jks
-          # Minimal, safe check that doesn’t print private info
-          (set +x; keytool -list -keystore android/app/release-keystore.jks -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1) || (echo "Keystore password seems wrong"; exit 1)
 
-      - name: Show Flutter/Gradle env
-        shell: bash
+      - name: Build Release AAB
         run: |
-          set -eux
-          flutter --version
-          java -version
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "PATH=$PATH"
-
-      - name: flutter pub get
-        run: flutter pub get
-
-      - name: Build AAB (release, no icon shake)
-        env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-        run: |
-          set -euxo pipefail
-          # Make absolutely sure sdkmanager/adb we rely on come from our SDK
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          flutter build appbundle --release --no-tree-shake-icons
+          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          ./gradlew bundleRelease
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
-          path: build/app/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
+          path: android/app/build/outputs/bundle/release/app-release.aab
