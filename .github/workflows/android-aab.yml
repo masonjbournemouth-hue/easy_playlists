@@ -123,6 +123,26 @@ jobs:
           echo "sdkmanager version:"
           "$SDKMGR" --version || true
 
+      - name: Persist ANDROID_* env + write local.properties
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # Persist env to later steps
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$HOME/android-sdk/platform-tools" >> "$GITHUB_PATH"
+
+          # Ensure Flutter sees the correct SDK path
+          mkdir -p android
+          printf "sdk.dir=%s\n" "$HOME/android-sdk" > android/local.properties
+
+          echo "local.properties written:"
+          cat android/local.properties
+
+          echo "sdkmanager version (sanity):"
+          sdkmanager --version || true
+
 
       - name: Decode keystore and write key.properties
         if: ${{ env.KEYSTORE_BASE64 != '' }}
