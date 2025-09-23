@@ -57,40 +57,31 @@ jobs:
         run: |
           set -euxo pipefail
 
-          # Resolve sdkmanager path regardless of Google’s zip layout
           if [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
             SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           elif [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin/sdkmanager" ]; then
             SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin/sdkmanager"
           else
-            echo "sdkmanager not found under $ANDROID_SDK_ROOT/cmdline-tools/latest"
-            ls -R "$ANDROID_SDK_ROOT/cmdline-tools" || true
+            echo "sdkmanager not found"
             exit 1
           fi
 
-          # 1) Force-accept all licenses (feed a LOT of 'y' answers)
-          yes 'y' | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
-          # Double-check and fail if anything is still pending
-          if "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses | grep -q "not accepted"; then
-            echo "Licenses still not accepted after first pass; trying again..."
-            yes 'y' | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses
-          fi
-          # Final verification (hard fail if still pending)
-          if "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses | grep -q "not accepted"; then
-            echo "ERROR: Some SDK licenses are still not accepted."
-            exit 1
-          fi
-
-          # 2) Install required packages (again, force yes)
-          yes 'y' | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" \
-            "platform-tools" \
-            "platforms;${PLATFORM_API}" \
-            "build-tools;${BUILD_TOOLS}" \
-            "cmake;3.22.1" \
+          # Required packages
+          pkgs=(
+            "platform-tools"
+            "platforms;${PLATFORM_API}"
+            "build-tools;${BUILD_TOOLS}"
+            "cmake;3.22.1"
             "ndk;${NDK_VERSION}"
+          )
 
-          # Show what’s installed for troubleshooting
-          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --list | tail -n +1 || true
+          for pkg in "${pkgs[@]}"; do
+            echo "Installing $pkg"
+            yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "$pkg" || true
+          done
+
+          # Force license acceptance for all
+          yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
 
 
       - name: Decode keystore from secret
