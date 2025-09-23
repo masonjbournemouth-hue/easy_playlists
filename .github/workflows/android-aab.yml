@@ -43,30 +43,86 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Manual install Android SDK + accept licenses
+      - name: Manual install Android SDK + accept licenses (robust)
         shell: bash
         run: |
           set -euxo pipefail
+
           export ANDROID_SDK_ROOT="$HOME/android-sdk"
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
-
-          # Get commandline tools and place at .../cmdline-tools/latest (correct structure for sdkmanager)
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
           cd "$ANDROID_SDK_ROOT/cmdline-tools"
-          curl -L -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
+
+          # --- Download commandline-tools with retries ---
+          URL="https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip"
+          for i in 1 2 3 4 5; do
+            echo "Download attempt $i..."
+            if curl -fSL --retry 5 --retry-all-errors -o tools.zip "$URL"; then
+              break
+            fi
+            echo "Download failed (attempt $i). Sleeping 5s..."
+            sleep 5
+          done
+
+          # Quick sanity check: file should be ~150MB+
+          test -s tools.zip
+          ls -lh tools.zip
+
+          # --- Unzip into the exact structure sdkmanager expects ---
+          rm -rf latest
           unzip -q tools.zip
           rm -f tools.zip
-          mv cmdline-tools latest
+          # The archive extracts to ./cmdline-tools; move it to ./latest
+          if [ -d "cmdline-tools" ]; then
+            mv cmdline-tools latest
+          fi
 
           SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMGR" ]; then
+            echo "sdkmanager not found at $SDKMGR"
+            find "$ANDROID_SDK_ROOT/cmdline-tools" -maxdepth 3 -type f -name sdkmanager || true
+            exit 1
+          fi
 
-          yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses
+          # Put sdkmanager on PATH for any sub-processes
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
 
-          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools"
-          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "platforms;android-34"
-          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "build-tools;34.0.0"
-          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "cmake;3.22.1"
-          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "ndk;27.0.12077973"
+          # --- Accept licenses (with retries because Google endpoints can flake) ---
+          for i in 1 2 3; do
+            set +e
+            yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses
+            RC=$?
+            set -e
+            if [ $RC -eq 0 ]; then
+              break
+            fi
+            echo "License acceptance failed (attempt $i). Sleeping 5s..."
+            sleep 5
+          done
+
+          # --- Install required packages one-by-one (each with its own retry) ---
+          install_pkg() {
+            local PKG="$1"
+            for i in 1 2 3; do
+              if "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "$PKG"; then
+                return 0
+              fi
+              echo "Install $PKG failed (attempt $i). Sleeping 5s..."
+              sleep 5
+            done
+            echo "Giving up installing $PKG"
+            return 1
+          }
+
+          install_pkg "platform-tools"
+          install_pkg "platforms;android-34"
+          install_pkg "build-tools;34.0.0"
+          install_pkg "cmake;3.22.1"
+          install_pkg "ndk;27.0.12077973"
+
+          echo "sdkmanager version:"
+          "$SDKMGR" --version || true
+
 
       - name: Decode keystore and write key.properties
         if: ${{ env.KEYSTORE_BASE64 != '' }}
