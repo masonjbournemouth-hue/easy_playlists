@@ -56,26 +56,42 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          # Resolve the actual sdkmanager path regardless of Google’s zip layout
+
+          # Resolve sdkmanager path regardless of Google’s zip layout
           if [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
             SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           elif [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin/sdkmanager" ]; then
             SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin/sdkmanager"
           else
-            echo "sdkmanager not found under cmdline-tools/latest"; ls -R "$ANDROID_SDK_ROOT/cmdline-tools" || true
+            echo "sdkmanager not found under $ANDROID_SDK_ROOT/cmdline-tools/latest"
+            ls -R "$ANDROID_SDK_ROOT/cmdline-tools" || true
             exit 1
           fi
 
-          yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses
+          # 1) Force-accept all licenses (feed a LOT of 'y' answers)
+          yes 'y' | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
+          # Double-check and fail if anything is still pending
+          if "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses | grep -q "not accepted"; then
+            echo "Licenses still not accepted after first pass; trying again..."
+            yes 'y' | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses
+          fi
+          # Final verification (hard fail if still pending)
+          if "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses | grep -q "not accepted"; then
+            echo "ERROR: Some SDK licenses are still not accepted."
+            exit 1
+          fi
 
-          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" \
+          # 2) Install required packages (again, force yes)
+          yes 'y' | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" \
             "platform-tools" \
             "platforms;${PLATFORM_API}" \
             "build-tools;${BUILD_TOOLS}" \
             "cmake;3.22.1" \
             "ndk;${NDK_VERSION}"
 
+          # Show what’s installed for troubleshooting
           "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --list | tail -n +1 || true
+
 
       - name: Decode keystore from secret
         shell: bash
