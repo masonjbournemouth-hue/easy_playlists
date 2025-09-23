@@ -39,10 +39,9 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.32.x"
-          channel: "stable"
+          channel: stable
           cache: true
 
-      # Install Android cmdline-tools manually and put them on PATH
       - name: Install Android cmdline-tools
         shell: bash
         run: |
@@ -52,22 +51,31 @@ jobs:
           curl -L -o tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip"
           unzip -q tools.zip -d latest
           rm -f tools.zip
-          # Expose sdkmanager & platform-tools for all later steps
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
 
       - name: Accept SDK licenses & install packages
         shell: bash
         run: |
           set -euxo pipefail
-          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses
-          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
+          # Resolve the actual sdkmanager path regardless of Google’s zip layout
+          if [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin/sdkmanager" ]; then
+            SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin/sdkmanager"
+          else
+            echo "sdkmanager not found under cmdline-tools/latest"; ls -R "$ANDROID_SDK_ROOT/cmdline-tools" || true
+            exit 1
+          fi
+
+          yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses
+
+          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" \
             "platform-tools" \
             "platforms;${PLATFORM_API}" \
             "build-tools;${BUILD_TOOLS}" \
             "cmake;3.22.1" \
             "ndk;${NDK_VERSION}"
-          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --list || true
+
+          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --list | tail -n +1 || true
 
       - name: Decode keystore from secret
         shell: bash
