@@ -8,6 +8,11 @@ android {
     namespace "com.example.playlist_city" // keep your real namespace
     compileSdk flutter.compileSdkVersion
 
+android {
+    // ...existing config...
+    ndkVersion "27.0.12077973"
+}
+
     defaultConfig {
         applicationId "com.example.playlist_city" // keep your real ID
         minSdk 21
