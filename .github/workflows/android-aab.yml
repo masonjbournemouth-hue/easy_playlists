@@ -12,59 +12,87 @@ on:
 
 jobs:
   build-aab:
-    name: Build Release AAB
+    name: Build signed AAB
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 60
+
+    env:
+      # Keystore secrets (must be set in GitHub repo Settings → Secrets and variables → Actions → New repository secret)
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up JDK 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
 
-      - name: Install Android SDK (manual)
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Manual install Android SDK + accept licenses
         shell: bash
         run: |
           set -euxo pipefail
-
           export ANDROID_SDK_ROOT="$HOME/android-sdk"
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
+
+          # Get commandline tools and place at .../cmdline-tools/latest (correct structure for sdkmanager)
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
           cd "$ANDROID_SDK_ROOT/cmdline-tools"
+          curl -L -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
+          unzip -q tools.zip
+          rm -f tools.zip
+          mv cmdline-tools latest
 
-          # Download cmdline-tools
-          curl -L -o tools.zip "https://dl.google.com/android/repository
+          SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
 
+          yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses
 
-      - name: Restore keystore from secret
+          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools"
+          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "platforms;android-34"
+          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "build-tools;34.0.0"
+          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "cmake;3.22.1"
+          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "ndk;27.0.12077973"
+
+      - name: Decode keystore and write key.properties
+        if: ${{ env.KEYSTORE_BASE64 != '' }}
         shell: bash
         run: |
           set -euxo pipefail
-          test -n "$KEYSTORE_BASE64"
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
-          ls -lh android/app/release-keystore.jks
+          cat > android/key.properties <<'EOF'
+          storeFile=app/release-keystore.jks
+          storePassword=${KEYSTORE_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          keyPassword=${KEY_PASSWORD}
+          EOF
 
-      - name: Build signed AAB
+      - name: Build AAB (release)
         shell: bash
         env:
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          ANDROID_SDK_ROOT: ${{ env.HOME }}/android-sdk
+          ANDROID_HOME: ${{ env.HOME }}/android-sdk
         run: |
           set -euxo pipefail
-          ./gradlew --no-daemon --stacktrace \
-            -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" \
-            bundleRelease
+          flutter build appbundle --release --no-shrink --no-tree-shake-icons
 
-      - name: Upload AAB artifact
+      - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
