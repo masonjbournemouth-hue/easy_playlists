@@ -1,3 +1,4 @@
+// android/app/build.gradle  (Groovy, not KTS)
 plugins {
     id 'com.android.application'
     id 'kotlin-android'
@@ -5,86 +6,72 @@ plugins {
 }
 
 android {
-    namespace "com.example.playlist_city" // keep your real namespace
+    namespace "com.example.playlist_city"
     compileSdk flutter.compileSdkVersion
-
-android {
-    // ...existing config...
     ndkVersion "27.0.12077973"
-    // ... your existing config (namespace/compileSdk/defaultConfig/buildTypes/etc.)
-
-    // Match the NDK your plugins expect
-    ndkVersion "27.0.12077973"
-
-    packagingOptions {
-        jniLibs {
-            useLegacyPackaging true
-            keepDebugSymbols += ["**/*.so"]
-
-    // Stop Gradle from stripping native libs on CI
-}
 
     defaultConfig {
-        applicationId "com.example.playlist_city" // keep your real ID
+        applicationId "com.example.playlist_city"
         minSdk 21
         targetSdk flutter.targetSdkVersion
         versionCode flutter.versionCode
         versionName flutter.versionName
+
         multiDexEnabled true
     }
 
     signingConfigs {
         release {
-            // Prefer key.properties when present (local builds),
-            // BUT in CI we’ll override via env (see workflow below)
-            def propsFile = rootProject.file("key.properties")
-            if (propsFile.exists()) {
-                def p = new Properties()
-                p.load(new FileInputStream(propsFile))
-                storeFile file(p['storeFile'])
-                storePassword p['storePassword']
-                keyAlias p['keyAlias']
-                keyPassword p['keyPassword']
-            } else {
-                // CI path – uses env provided by GitHub Actions
-                if (System.getenv("CI") == "true") {
-                    storeFile file("$rootDir/app/release-keystore.jks")
-                    storePassword System.getenv("KEYSTORE_PASSWORD")
-                    keyAlias System.getenv("KEY_ALIAS")
-                    keyPassword System.getenv("KEY_PASSWORD")
-                }
+            // Only configure if secrets are present (CI)
+            if (System.getenv("KEYSTORE_PASSWORD") != null &&
+                System.getenv("KEY_ALIAS") != null &&
+                System.getenv("KEY_PASSWORD") != null) {
+                storeFile file("release-keystore.jks")
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD")
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
-            minifyEnabled false       // keep off until you’re ready to shrink
+            // Use release signing if it’s configured; otherwise Gradle won’t crash
+            if (signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
+            }
+            // Keep shrinkers off for now to reduce CI flakiness
+            minifyEnabled false
             shrinkResources false
+
+            // Keep native debug symbols so CI doesn’t try to strip them
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
         }
         debug {
             debuggable true
         }
     }
 
-    // Tell AGP exactly which NDK to use
-    ndkVersion "27.0.12077973"
-
-    // AGP 8+ packaging DSL — keep debug symbols (don’t strip .so files)
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-            keepDebugSymbols += ["**/*.so"]
-        }
-    }
-
-
+    // Toolchains
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
-    kotlinOptions { jvmTarget = '11' }
+    kotlinOptions {
+        jvmTarget = '11'
+    }
+
+    // Avoid META-INF clashes and keep .so symbols
+    packagingOptions {
+        jniLibs {
+            keepDebugSymbols.add("**/*.so")
+        }
+        resources {
+            excludes += ['META-INF/AL2.0', 'META-INF/LGPL2.1']
+        }
+    }
 }
 
 dependencies {
