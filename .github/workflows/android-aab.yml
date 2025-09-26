@@ -83,6 +83,14 @@ jobs:
           # Force license acceptance for all
           yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
 
+      - name: Write local.properties for CI
+        run: |
+          set -eux
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          echo "flutter.sdk=$(which flutter | sed 's#/bin/flutter##')" >> android/local.properties
+          echo "ndk.dir=$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}" >> android/local.properties
+          cat android/local.properties
+
 
       - name: Decode keystore from secret
         shell: bash
