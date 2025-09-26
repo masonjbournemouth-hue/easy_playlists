@@ -89,14 +89,22 @@ jobs:
       - name: flutter pub get
         run: flutter pub get
 
-      - name: Build AAB (release)
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          set -eux
-          flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose --refresh-dependencies
+# --- CLEAN & BUILD AAB ---
+- name: Clean Gradle/Flutter caches
+  run: |
+    set -eux
+    ./android/gradlew --stop || true
+    rm -rf $HOME/.gradle/caches $HOME/.gradle/daemon $HOME/.gradle/kotlin || true
+    rm -rf android/.gradle || true
+    flutter clean
+
+- name: Build AAB (release)
+  run: |
+    set -eux
+    flutter pub get
+    # Build without shrinking/tree-shake so CI is lighter; packaging is set to keep symbols
+    flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose
+
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
