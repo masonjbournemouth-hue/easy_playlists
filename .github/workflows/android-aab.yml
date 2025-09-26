@@ -101,13 +101,35 @@ jobs:
           EOF
           sed -n '1,20p' android/local.properties
 
+      - name: Show env & paths
+        run: |
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          which sdkmanager || true
+          which adb || true
+          sdkmanager --version || true
+          ls -la "$ANDROID_SDK_ROOT" || true
+          ls -la "$ANDROID_SDK_ROOT/platform-tools" || true
+
+      - name: Configure Flutter to use the Android SDK
+        run: |
+          set -eux
+          flutter --version
+          flutter config --android-sdk "$ANDROID_SDK_ROOT"
+          flutter doctor -v
+
       - name: flutter pub get
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          PATH: ${{ env.PATH }}:${{ env.ANDROID_SDK_ROOT }}/platform-tools:${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin:${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/cmdline-tools/bin
         run: flutter pub get
 
       - name: Build AAB (release)
         env:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          PATH: ${{ env.PATH }}:${{ env.ANDROID_SDK_ROOT }}/platform-tools:${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin:${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/cmdline-tools/bin
         run: |
           set -eux
           flutter build appbundle --release --no-shrink --no-tree-shake-icons
