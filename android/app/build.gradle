@@ -11,6 +11,12 @@ android {
 android {
     // ...existing config...
     ndkVersion "27.0.12077973"
+    // ... your existing config (namespace/compileSdk/defaultConfig/buildTypes/etc.)
+
+    // Match the NDK your plugins expect
+    ndkVersion "27.0.12077973"
+
+    // Stop Gradle from stripping native libs on CI
 }
 
     defaultConfig {
@@ -72,6 +78,8 @@ android {
     packagingOptions {
         jniLibs {
             useLegacyPackaging = true
+	// Keep symbols for all .so files so the strip step is skipped
+            keepDebugSymbols += ['**/*.so']	
         }
         doNotStrip "**/*.so"
     }
