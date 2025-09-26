@@ -96,7 +96,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set -eux
-          flutter build appbundle --release --no-shrink --no-tree-shake-icons
+          flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose --refresh-dependencies
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
