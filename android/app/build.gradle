@@ -57,6 +57,18 @@ android {
         }
     }
 
+    // Tell AGP exactly which NDK to use
+    ndkVersion "27.0.12077973"
+
+    // AGP 8+ packaging DSL — keep debug symbols (don’t strip .so files)
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            keepDebugSymbols += ["**/*.so"]
+        }
+    }
+
+
     packagingOptions {
         jniLibs {
             useLegacyPackaging = true

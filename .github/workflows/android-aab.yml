@@ -10,6 +10,57 @@ on:
       - "pubspec.yaml"
       - ".github/workflows/android-aab.yml"
 
+      - name: Install Android SDK packages (manual)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export ANDROID_SDK_ROOT="$HOME/android-sdk"
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          cd "$ANDROID_SDK_ROOT/cmdline-tools"
+
+          # Download commandline tools
+          curl -L -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
+          unzip -q tools.zip -d latest
+          rm -f tools.zip
+
+          # Pick the sdkmanager path
+          if [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          else
+            SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin/sdkmanager"
+          fi
+
+          yes y | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses
+
+          # Install what we need
+          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "cmake;3.22.1" \
+            "ndk;27.0.12077973"
+
+          echo "Installed packages:"
+          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --list | sed -n '1,120p'
+
+      - name: Write CI local.properties
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "sdk.dir=$HOME/android-sdk" > android/local.properties
+          echo "ndk.dir=$HOME/android-sdk/ndk/27.0.12077973" >> android/local.properties
+          # flutter.sdk is optional but harmless; resolves if Flutter is on PATH
+          which flutter >/dev/null 2>&1 && echo "flutter.sdk=$(which flutter | sed 's#/bin/flutter##')" >> android/local.properties || true
+          echo "=== android/local.properties ==="
+          cat android/local.properties
+
+      - name: Build AAB (release)
+        run: |
+          set -euxo pipefail
+          flutter build appbundle --release --no-shrink --no-tree-shake-icons
+
+
 jobs:
   build-aab:
     runs-on: ubuntu-latest
