@@ -49,7 +49,6 @@ jobs:
 
       - name: Accept SDK licenses (non-interactive)
         run: |
-          # Don't fail the job if `yes` gets a SIGPIPE when sdkmanager finishes.
           set +e
           yes y | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null
           echo "sdkmanager --licenses exit code: $?"
@@ -72,7 +71,6 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           set -eux
-          # Create the keystore in the path your build.gradle expects
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
           ls -l android/app/release-keystore.jks
 
@@ -89,22 +87,19 @@ jobs:
       - name: flutter pub get
         run: flutter pub get
 
-# --- CLEAN & BUILD AAB ---
-- name: Clean Gradle/Flutter caches
-  run: |
-    set -eux
-    ./android/gradlew --stop || true
-    rm -rf $HOME/.gradle/caches $HOME/.gradle/daemon $HOME/.gradle/kotlin || true
-    rm -rf android/.gradle || true
-    flutter clean
+      - name: Clean Gradle/Flutter caches
+        run: |
+          set -eux
+          ./android/gradlew --stop || true
+          rm -rf $HOME/.gradle/caches $HOME/.gradle/daemon $HOME/.gradle/kotlin || true
+          rm -rf android/.gradle || true
+          flutter clean
 
-- name: Build AAB (release)
-  run: |
-    set -eux
-    flutter pub get
-    # Build without shrinking/tree-shake so CI is lighter; packaging is set to keep symbols
-    flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose
-
+      - name: Build AAB (release)
+        run: |
+          set -eux
+          flutter pub get
+          flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
