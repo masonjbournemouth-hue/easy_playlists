@@ -22,7 +22,6 @@ jobs:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
       JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
-      # These must exist in repo Settings > Secrets and variables > Actions (Repository secrets)
       KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
       KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -48,7 +47,6 @@ jobs:
           curl -sSL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
           unzip -q tools.zip -d latest
           rm -f tools.zip
-          # Make sdkmanager available
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin" >> "$GITHUB_PATH"
 
       - name: Accept SDK licenses (non-interactive)
@@ -70,20 +68,12 @@ jobs:
             "ndk;27.0.12077973"
           echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
 
-      - name: Write local.properties (point Flutter/Gradle to this SDK)
-        run: |
-          set -eux
-          printf "sdk.dir=%s\nflutter.sdk=%s\n" "$ANDROID_SDK_ROOT" "$FLUTTER_HOME" > android/local.properties || true
-          echo "android/local.properties:"
-          cat android/local.properties || true
-
       - name: Decode keystore from secrets
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           set -eux
           test -n "$KEYSTORE_BASE64"
-          # Path must match what your app/build.gradle expects (android/app/release-keystore.jks)
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
           ls -l android/app/release-keystore.jks
 
@@ -99,6 +89,14 @@ jobs:
           flutter-version: "3.32.8"
           channel: "stable"
           cache: true
+
+      - name: Write local.properties (after Flutter is on PATH)
+        run: |
+          set -eux
+          FLUTTER_SDK_DIR="$(dirname "$(dirname "$(which flutter)")")"
+          printf "sdk.dir=%s\nflutter.sdk=%s\n" "$ANDROID_SDK_ROOT" "$FLUTTER_SDK_DIR" > android/local.properties
+          echo "android/local.properties:"
+          cat android/local.properties
 
       - name: Doctor (sanity check)
         run: flutter doctor -v
@@ -117,7 +115,6 @@ jobs:
       - name: Build AAB (release)
         run: |
           set -eux
-          # Keep shrinkers off while stabilising CI; packaging keeps debug symbols
           flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose
 
       - name: Upload bundle artifact
