@@ -87,46 +87,50 @@ jobs:
       - name: flutter pub get
         run: flutter pub get
 
+      # Show repo layout (debug: proves where gradlew lives)
+      - name: Show repo layout
+        run: |
+          set -eux
+          pwd
+          ls -la
+          ls -la android || true
+          ls -la android/app || true
+
+      # Clean caches & stop daemons
       - name: Clean Gradle/Flutter caches
         run: |
           set -eux
-          ./android/gradlew --stop || true
+          # Ensure wrapper is executable even if git lost the bit
+          chmod +x android/gradlew || true
+          (cd android && ./gradlew --stop) || true
           rm -rf $HOME/.gradle/caches $HOME/.gradle/daemon $HOME/.gradle/kotlin || true
           rm -rf android/.gradle || true
           flutter clean
 
-      # Clean caches to avoid "Already watching path" and stale transforms
-      - name: Clean Gradle/Flutter caches
-        run: |
-          set -eux
-          ./android/gradlew --stop || true
-          rm -rf $HOME/.gradle/caches $HOME/.gradle/daemon $HOME/.gradle/kotlin || true
-          rm -rf android/.gradle || true
-          flutter clean
-
-      - name: Build AAB (release)
+      # Build with Gradle directly from /android
+      - name: Build AAB (Gradle, release)
+        working-directory: android
         env:
-          # Give Gradle & Java more headroom and turn off VFS watch
+          ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+          ANDROID_HOME: ${{ github.workspace }}/android-sdk
           _JAVA_OPTIONS: "-Xmx2g -XX:MaxMetaspaceSize=512m"
           JAVA_TOOL_OPTIONS: "-Xmx2g -XX:MaxMetaspaceSize=512m"
-          GRADLE_OPTS: '-Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m" -Dorg.gradle.vfs.watch=false'
+          GRADLE_OPTS: '-Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m" -Dorg.gradle.vfs.watch=false -Dorg.gradle.parallel=false'
         run: |
           set -eux
-          # Double-check the keystore exists where build.gradle expects it
-          ls -l android/app/release-keystore.jks
+          # Sanity: wrapper present & executable
+          ls -l gradlew
+          # Make sure gradle.properties is conservative
+          echo "----- gradle.properties -----"
+          cat ../android/gradle.properties || true
+          echo "-----------------------------"
 
-          # Sanity: show gradle.properties that we just set (helps debugging)
-          echo "----- android/gradle.properties ----"
-          cat android/gradle.properties || true
-          echo "------------------------------------"
-
-          # Build via Flutter with shrinkers off to reduce R8 pressure
-          flutter pub get
-          flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose
+          # This invokes the Flutter Gradle plugin and produces the AAB
+          ./gradlew :app:bundleRelease --no-daemon --stacktrace --info
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
-          path: build/app/outputs/bundle/release/app-release.aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
