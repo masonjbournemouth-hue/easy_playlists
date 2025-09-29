@@ -95,9 +95,32 @@ jobs:
           rm -rf android/.gradle || true
           flutter clean
 
-      - name: Build AAB (release)
+      # Clean caches to avoid "Already watching path" and stale transforms
+      - name: Clean Gradle/Flutter caches
         run: |
           set -eux
+          ./android/gradlew --stop || true
+          rm -rf $HOME/.gradle/caches $HOME/.gradle/daemon $HOME/.gradle/kotlin || true
+          rm -rf android/.gradle || true
+          flutter clean
+
+      - name: Build AAB (release)
+        env:
+          # Give Gradle & Java more headroom and turn off VFS watch
+          _JAVA_OPTIONS: "-Xmx2g -XX:MaxMetaspaceSize=512m"
+          JAVA_TOOL_OPTIONS: "-Xmx2g -XX:MaxMetaspaceSize=512m"
+          GRADLE_OPTS: '-Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m" -Dorg.gradle.vfs.watch=false'
+        run: |
+          set -eux
+          # Double-check the keystore exists where build.gradle expects it
+          ls -l android/app/release-keystore.jks
+
+          # Sanity: show gradle.properties that we just set (helps debugging)
+          echo "----- android/gradle.properties ----"
+          cat android/gradle.properties || true
+          echo "------------------------------------"
+
+          # Build via Flutter with shrinkers off to reduce R8 pressure
           flutter pub get
           flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose
 
