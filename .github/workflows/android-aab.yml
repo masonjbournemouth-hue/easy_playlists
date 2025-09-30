@@ -10,7 +10,6 @@ on:
       - "pubspec.yaml"
       - ".github/workflows/android-aab.yml"
 
-# IMPORTANT: run everything from repo root (no global working-directory)
 defaults:
   run:
     shell: bash
@@ -51,7 +50,6 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # Install SDK cmdline-tools and expose sdkmanager on PATH
       - name: Install Android commandline-tools
         run: |
           set -eux
@@ -110,7 +108,6 @@ jobs:
           rm -rf android/.gradle || true
           flutter clean
 
-      # Build the AAB via Flutter (resolves Gradle via the wrapper)
       - name: Build AAB (release)
         run: |
           set -eux
