@@ -29,14 +29,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Debug: where are we?
-        run: |
-          set -eux
-          pwd
-          ls -la
-          ls -la android || true
-          ls -la android/gradle/wrapper || true
-
       - name: Ensure Gradle wrapper exists (from repo root)
         run: |
           set -eux
