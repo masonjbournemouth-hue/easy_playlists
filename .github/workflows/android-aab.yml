@@ -22,6 +22,7 @@ jobs:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
       JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
+      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
 
     steps:
       - name: Checkout
@@ -29,10 +30,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure Gradle wrapper exists (from repo root)
+      - name: Ensure Gradle wrapper exists
         run: |
           set -eux
-          test -x android/gradlew || (echo "ERROR: android/gradlew missing or not executable" && exit 1)
+          test -x android/gradlew || { echo "android/gradlew missing"; exit 1; }
           chmod +x android/gradlew
 
       - name: Set up Java 17
@@ -42,6 +43,7 @@ jobs:
           java-version: "17"
           cache: gradle
 
+      # Minimal, stable Android SDK bootstrap
       - name: Install Android commandline-tools
         run: |
           set -eux
@@ -52,11 +54,11 @@ jobs:
           rm -f tools.zip
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin" >> "$GITHUB_PATH"
 
-      - name: Accept SDK licenses (non-interactive)
+      - name: Accept SDK licenses
         run: |
           set +e
           yes y | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null
-          echo "sdkmanager --licenses exit code: $?"
+          echo "licenses exit code: $?"
           set -e
 
       - name: Install required SDK packages
@@ -76,34 +78,76 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           set -eux
+          test -n "$KEYSTORE_BASE64"
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
           ls -l android/app/release-keystore.jks
 
+      - name: Write local.properties
+        run: |
+          set -eux
+          printf "sdk.dir=%s\n" "$ANDROID_SDK_ROOT" > android/local.properties
+          cat android/local.properties
+
+      - name: Gradle versions (quick sanity)
+        run: |
+          set -eux
+          ./android/gradlew --version
+
+      - name: Clean Gradle caches (light)
+        run: |
+          set -eux
+          ./android/gradlew --stop || true
+          rm -rf android/.gradle || true
+
+      # ---------- BUILD WITH GRADLE (more verbose) ----------
+      - name: Build AAB with Gradle (verbose, stacktrace)
+        id: gradle_build
+        run: |
+          set -eux
+          # Capture detailed output to a file we can upload
+          ./android/gradlew :app:bundleRelease \
+            --no-daemon --stacktrace --info \
+            -Dorg.gradle.jvmargs="-Xmx1536m -XX:MaxMetaspaceSize=512m" \
+            | tee gradle-info.log
+
+      - name: Upload Gradle log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-info-log
+          path: gradle-info.log
+          if-no-files-found: warn
+
+      # ---------- ALSO TRY VIA FLUTTER (secondary path) ----------
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.32.8"
-          channel: "stable"
+          channel: stable
           cache: true
 
-      - name: Flutter doctor (sanity check)
-        run: flutter doctor -v
+      - name: flutter doctor
+        run: flutter doctor -v || true
 
       - name: flutter pub get
         run: flutter pub get
 
-      - name: Clean Gradle/Flutter caches
-        run: |
-          set -eux
-          ./android/gradlew --stop || true
-          rm -rf "$HOME/.gradle/caches" "$HOME/.gradle/daemon" "$HOME/.gradle/kotlin" || true
-          rm -rf android/.gradle || true
-          flutter clean
+      - name: Clean Flutter project
+        run: flutter clean
 
-      - name: Build AAB (release)
+      - name: Build AAB with Flutter (secondary)
         run: |
           set -eux
-          flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose
+          flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose \
+            | tee flutter-info.log
+
+      - name: Upload Flutter log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-info-log
+          path: flutter-info.log
+          if-no-files-found: warn
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
