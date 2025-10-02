@@ -37,7 +37,7 @@ jobs:
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
-       with:
+        with:
           distribution: temurin
           java-version: "17"
           cache: gradle
@@ -86,7 +86,7 @@ jobs:
           channel: "stable"
           cache: true
 
-      - name: flutter doctor (sanity check)
+      - name: Flutter doctor (sanity check)
         run: flutter doctor -v
 
       - name: flutter pub get
@@ -96,7 +96,7 @@ jobs:
         run: |
           set -eux
           ./android/gradlew --stop || true
-          rm -rf $HOME/.gradle/caches $HOME/.gradle/daemon $HOME/.gradle/kotlin || true
+          rm -rf "$HOME/.gradle/caches" "$HOME/.gradle/daemon" "$HOME/.gradle/kotlin" || true
           rm -rf android/.gradle || true
           flutter clean
 
