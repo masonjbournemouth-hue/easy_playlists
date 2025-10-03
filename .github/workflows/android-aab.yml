@@ -43,7 +43,7 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # Minimal, stable Android SDK bootstrap
+      # Minimal SDK bootstrap
       - name: Install Android commandline-tools
         run: |
           set -eux
@@ -88,27 +88,29 @@ jobs:
           printf "sdk.dir=%s\n" "$ANDROID_SDK_ROOT" > android/local.properties
           cat android/local.properties
 
-      - name: Gradle versions (quick sanity)
+      - name: Gradle versions (sanity)
+        working-directory: android
         run: |
           set -eux
-          ./android/gradlew --version
+          ./gradlew --version
 
       - name: Clean Gradle caches (light)
+        working-directory: android
         run: |
           set -eux
-          ./android/gradlew --stop || true
-          rm -rf android/.gradle || true
+          ./gradlew --stop || true
+          rm -rf .gradle || true
 
-      # ---------- BUILD WITH GRADLE (more verbose) ----------
+      # ------------ BUILD WITH GRADLE (IN android/) ------------
       - name: Build AAB with Gradle (verbose, stacktrace)
         id: gradle_build
+        working-directory: android
         run: |
           set -eux
-          # Capture detailed output to a file we can upload
-          ./android/gradlew :app:bundleRelease \
+          ./gradlew :app:bundleRelease \
             --no-daemon --stacktrace --info \
             -Dorg.gradle.jvmargs="-Xmx1536m -XX:MaxMetaspaceSize=512m" \
-            | tee gradle-info.log
+            | tee ../gradle-info.log
 
       - name: Upload Gradle log
         if: always()
@@ -118,7 +120,7 @@ jobs:
           path: gradle-info.log
           if-no-files-found: warn
 
-      # ---------- ALSO TRY VIA FLUTTER (secondary path) ----------
+      # ------------ ALSO TRY VIA FLUTTER (SECONDARY) ------------
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -149,9 +151,19 @@ jobs:
           path: flutter-info.log
           if-no-files-found: warn
 
-      - name: Upload bundle artifact
+      # Upload bundle from either Gradle or Flutter path
+      - name: Upload bundle artifact (Gradle path)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-aab
+          name: app-release-aab-gradle
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: warn
+
+      - name: Upload bundle artifact (Flutter path)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab-flutter
           path: build/app/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
+          if-no-files-found: warn
