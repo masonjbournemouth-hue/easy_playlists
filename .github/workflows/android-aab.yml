@@ -156,23 +156,39 @@ jobs:
         id: build_aab
         run: |
           set -eux
-          # run with VERY verbose logs and tee to files we’ll upload
           flutter --version | tee flutter-info.log
           flutter pub get | tee -a flutter-info.log
-          # verbose Flutter build (captures Dart compile errors)
-          flutter build appbundle --release --no-shrink --no-tree-shake-icons -v 2>&1 | tee -a flutter-info.log || echo "FLUTTER_BUILD_EXIT=$?" > build_exit.txt
-          # also try the Gradle task directly to get a Java/stacktrace view
-          ./android/gradlew :app:compileFlutterBuildRelease --stacktrace --warning-mode all 2>&1 | tee gradle-info.log || true
+          # Very verbose Flutter build (captures Dart compiler messages)
+          # Do not fail the step immediately; we want to extract errors and upload logs.
+          (flutter build appbundle --release --no-shrink --no-tree-shake-icons -v 2>&1 | tee -a flutter-info.log) || echo "FLUTTER_BUILD_EXIT=$?" > build_exit.txt
+          
+          # Also run the Gradle task explicitly to generate the Problems report
+          # and collect a Java-side view of errors without stopping the job.
+          (./android/gradlew :app:compileFlutterBuildRelease --stacktrace --warning-mode all 2>&1 | tee gradle-info.log) || true
 
-      - name: Upload logs (always)
+          # Try to pull out the first real Dart/Flutter error into a small file for quick viewing
+          awk '
+            /(^Unhandled exception:)|(^Error: )|(^lib\/)|(^Target )|(^\* Error)|(^ERROR:)/{seen=1}
+            seen{print}
+          ' flutter-info.log | head -n 120 > first-error.txt || true
+
+          # If Gradle generated a problems report, copy it where we can upload it
+          if [ -f build/reports/problems/problems-report.html ]; then
+            mkdir -p artifacts
+            cp build/reports/problems/problems-report.html artifacts/ || true
+          fi
+
+      - name: Upload logs and reports (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs
+          name: build-logs-and-report
           path: |
             flutter-info.log
             gradle-info.log
+            first-error.txt
             build_exit.txt
+            artifacts/**
           if-no-files-found: ignore
 
       - name: Upload bundle artifact
