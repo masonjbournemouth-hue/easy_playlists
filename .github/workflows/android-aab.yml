@@ -131,42 +131,56 @@ jobs:
           if-no-files-found: warn
 
       # ------------ ALSO TRY VIA FLUTTER (SECONDARY) ------------
-      - name: flutter doctor
-        run: flutter doctor -v || true
+      - name: flutter doctor (sanity check)
+        run: flutter doctor -v
 
-      - name: flutter pub get
-        run: flutter pub get
+      - name: flutter analyze (Dart compile checks)
+        run: flutter analyze || true
 
-      - name: Clean Flutter project
-        run: flutter clean
+      - name: Print pubspec + lock (context)
+        run: |
+          echo "------ pubspec.yaml ------"
+          sed -n '1,200p' pubspec.yaml || true
+          echo "------ pubspec.lock (top) ------"
+          sed -n '1,120p' pubspec.lock || true
 
-      - name: Build AAB with Flutter (secondary)
+      - name: Clean Gradle/Flutter caches
         run: |
           set -eux
-          flutter build appbundle --release --no-shrink --no-tree-shake-icons --verbose \
-            | tee flutter-info.log
+          ./android/gradlew --stop || true
+          rm -rf $HOME/.gradle/caches $HOME/.gradle/daemon $HOME/.gradle/kotlin || true
+          rm -rf android/.gradle || true
+          flutter clean
 
-      - name: Upload Flutter log
+      - name: Build AAB (release) with verbose logs
+        id: build_aab
+        run: |
+          set -eux
+          # run with VERY verbose logs and tee to files we’ll upload
+          flutter --version | tee flutter-info.log
+          flutter pub get | tee -a flutter-info.log
+          # verbose Flutter build (captures Dart compile errors)
+          flutter build appbundle --release --no-shrink --no-tree-shake-icons -v 2>&1 | tee -a flutter-info.log || echo "FLUTTER_BUILD_EXIT=$?" > build_exit.txt
+          # also try the Gradle task directly to get a Java/stacktrace view
+          ./android/gradlew :app:compileFlutterBuildRelease --stacktrace --warning-mode all 2>&1 | tee gradle-info.log || true
+
+      - name: Upload logs (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-info-log
-          path: flutter-info.log
-          if-no-files-found: warn
+          name: build-logs
+          path: |
+            flutter-info.log
+            gradle-info.log
+            build_exit.txt
+          if-no-files-found: ignore
 
-      # Upload bundle from either Gradle or Flutter path
-      - name: Upload bundle artifact (Gradle path)
-        if: always()
+      - name: Upload bundle artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-aab-gradle
-          path: android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: warn
-
-      - name: Upload bundle artifact (Flutter path)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-aab-flutter
-          path: build/app/outputs/bundle/release/app-release.aab
-          if-no-files-found: warn
+          name: app-release-aab
+          path: |
+            build/app/outputs/bundle/release/app-release.aab
+            android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
