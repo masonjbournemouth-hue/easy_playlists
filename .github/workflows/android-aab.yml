@@ -21,8 +21,6 @@ jobs:
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
-      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
 
     steps:
       - name: Checkout
@@ -30,10 +28,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure Gradle wrapper exists
+      - name: Ensure Gradle wrapper exists (from repo root)
         run: |
           set -eux
-          test -x android/gradlew || { echo "android/gradlew missing"; exit 1; }
+          test -x android/gradlew || (echo "ERROR: android/gradlew missing or not executable" && exit 1)
           chmod +x android/gradlew
 
       - name: Set up Java 17
@@ -53,11 +51,11 @@ jobs:
           rm -f tools.zip
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/cmdline-tools/bin" >> "$GITHUB_PATH"
 
-      - name: Accept SDK licenses
+      - name: Accept SDK licenses (non-interactive)
         run: |
           set +e
           yes y | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null
-          echo "licenses exit code: $?"
+          echo "sdkmanager --licenses exit code: $?"
           set -e
 
       - name: Install required SDK packages
@@ -84,95 +82,52 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.32.8"
-          channel: stable
+          channel: "stable"
           cache: true
+
+      - name: flutter doctor (sanity)
+        run: |
+          set -eux
+          flutter doctor -v
+          which flutter
 
       - name: Write local.properties (sdk.dir + flutter.sdk)
         run: |
           set -eux
-          # Discover flutter SDK path from the flutter binary on PATH
-          FLUTTER_BIN="$(command -v flutter)"
-          FLUTTER_SDK="$(dirname "$(dirname "$FLUTTER_BIN")")"
-          {
-            printf "sdk.dir=%s\n" "$ANDROID_SDK_ROOT"
-            printf "flutter.sdk=%s\n" "$FLUTTER_SDK"
-          } > android/local.properties
-          echo "local.properties:"
+          # Use the hostedtoolcache path where flutter-action installs Flutter.
+          FLUTTER_SDK="/opt/hostedtoolcache/flutter/stable-3.32.8-x64"
+          printf "sdk.dir=%s\nflutter.sdk=%s\n" "$ANDROID_SDK_ROOT" "$FLUTTER_SDK" > android/local.properties
+          echo "----- android/local.properties -----"
           cat android/local.properties
 
-      - name: Gradle versions (sanity)
-        working-directory: android
-        run: ./gradlew --version
+      - name: flutter pub get
+        run: flutter pub get
 
-      - name: Clean Gradle caches (light)
-        working-directory: android
+      # ---------- BUILD (Flutter) ----------
+      - name: Build AAB with Flutter (very verbose, never hide logs)
+        id: flutter_build
+        continue-on-error: true
         run: |
           set -eux
-          ./gradlew --stop || true
-          rm -rf .gradle || true
+          # Start fresh logs
+          : > flutter-info.log
+          # Run very verbose build; keep going to allow log upload on failure
+          (flutter build appbundle --release --no-shrink --no-tree-shake-icons -v 2>&1 | tee -a flutter-info.log) || echo "FLUTTER_BUILD_FAILED=1" > flutter_failed.flag
+          # Try to extract first real error for quick triage
+          awk '
+            /(^Unhandled exception:)|(^Error: )|(^lib\/.*:\d+:\d+:)|(^Target )|(^\* Error)|(^ERROR:)/{seen=1}
+            seen{print}
+          ' flutter-info.log | head -n 200 > first-error.txt || true
 
-      # ------------ BUILD WITH GRADLE (IN android/) ------------
+      # ---------- BUILD (Gradle compile to generate Problems report) ----------
       - name: Build AAB with Gradle (verbose, stacktrace)
         id: gradle_build
-        working-directory: android
+        continue-on-error: true
         run: |
           set -eux
-          ./gradlew :app:bundleRelease \
-            --no-daemon --stacktrace --info \
-            -Dorg.gradle.jvmargs="-Xmx1536m -XX:MaxMetaspaceSize=512m" \
-            | tee ../gradle-info.log
-
-      - name: Upload Gradle log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-info-log
-          path: gradle-info.log
-          if-no-files-found: warn
-
-      # ------------ ALSO TRY VIA FLUTTER (SECONDARY) ------------
-      - name: flutter doctor (sanity check)
-        run: flutter doctor -v
-
-      - name: flutter analyze (Dart compile checks)
-        run: flutter analyze || true
-
-      - name: Print pubspec + lock (context)
-        run: |
-          echo "------ pubspec.yaml ------"
-          sed -n '1,200p' pubspec.yaml || true
-          echo "------ pubspec.lock (top) ------"
-          sed -n '1,120p' pubspec.lock || true
-
-      - name: Clean Gradle/Flutter caches
-        run: |
-          set -eux
-          ./android/gradlew --stop || true
-          rm -rf $HOME/.gradle/caches $HOME/.gradle/daemon $HOME/.gradle/kotlin || true
-          rm -rf android/.gradle || true
-          flutter clean
-
-      - name: Build AAB (release) with verbose logs
-        id: build_aab
-        run: |
-          set -eux
-          flutter --version | tee flutter-info.log
-          flutter pub get | tee -a flutter-info.log
-          # Very verbose Flutter build (captures Dart compiler messages)
-          # Do not fail the step immediately; we want to extract errors and upload logs.
-          (flutter build appbundle --release --no-shrink --no-tree-shake-icons -v 2>&1 | tee -a flutter-info.log) || echo "FLUTTER_BUILD_EXIT=$?" > build_exit.txt
-          
-          # Also run the Gradle task explicitly to generate the Problems report
-          # and collect a Java-side view of errors without stopping the job.
-          (./android/gradlew :app:compileFlutterBuildRelease --stacktrace --warning-mode all 2>&1 | tee gradle-info.log) || true
-
-          # Try to pull out the first real Dart/Flutter error into a small file for quick viewing
-          awk '
-            /(^Unhandled exception:)|(^Error: )|(^lib\/)|(^Target )|(^\* Error)|(^ERROR:)/{seen=1}
-            seen{print}
-          ' flutter-info.log | head -n 120 > first-error.txt || true
-
-          # If Gradle generated a problems report, copy it where we can upload it
+          # Only run the Gradle compile task to generate the Problems report and capture Java-side issues
+          (cd android && ./gradlew :app:compileFlutterBuildRelease --stacktrace --warning-mode all 2>&1 | tee -a ../gradle-info.log) || true
+          # Upload the problems report if it exists
           if [ -f build/reports/problems/problems-report.html ]; then
             mkdir -p artifacts
             cp build/reports/problems/problems-report.html artifacts/ || true
@@ -187,12 +142,11 @@ jobs:
             flutter-info.log
             gradle-info.log
             first-error.txt
-            build_exit.txt
             artifacts/**
           if-no-files-found: ignore
 
       - name: Upload bundle artifact
-        if: success()
+        if: ${{ steps.flutter_build.outcome == 'success' && !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
