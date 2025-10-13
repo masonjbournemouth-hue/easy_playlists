@@ -6,48 +6,54 @@ plugins {
 }
 
 android {
-    namespace "com.example.playlist_city"
-    compileSdk flutter.compileSdkVersion
-    ndkVersion "27.0.12077973"
+    namespace "com.playlistcity.app"
+
+    compileSdk 35
 
     defaultConfig {
-        applicationId "com.example.playlist_city"
+        applicationId "com.playlistcity.app"
         minSdk 21
         targetSdk flutter.targetSdkVersion
-        versionCode flutter.versionCode
-        versionName flutter.versionName
-
-        multiDexEnabled true
+        // BUMP this to a new integer each upload:
+        versionCode 3
+        versionName "2.3"
     }
 
     signingConfigs {
-        release {
-            // Only configure if secrets are present (CI)
-            if (System.getenv("KEYSTORE_PASSWORD") != null &&
-                System.getenv("KEY_ALIAS") != null &&
-                System.getenv("KEY_PASSWORD") != null) {
-                storeFile file("release-keystore.jks")
-                storePassword System.getenv("KEYSTORE_PASSWORD")
-                keyAlias System.getenv("KEY_ALIAS")
-                keyPassword System.getenv("KEY_PASSWORD")
+	release {
+            def keystoreProperties = new Properties()
+            def keystoreFile = rootProject.file("key.properties")
+            if (keystoreFile.exists()) {
+                keystoreProperties.load(new FileInputStream(keystoreFile))
+                storeFile file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+            } else {
+                println("⚠️ Warning: key.properties not found, skipping local signing")
             }
         }
     }
 
     buildTypes {
         release {
-            // Use release signing if it’s configured; otherwise Gradle won’t crash
             if (signingConfigs.release.storeFile != null) {
                 signingConfig signingConfigs.release
             }
-            // Keep shrinkers off for now to reduce CI flakiness
+            // Disable shrinking/obfuscation for CI simplicity
             minifyEnabled false
             shrinkResources false
 
-            // Keep native debug symbols so CI doesn’t try to strip them
+            // Keep native debug symbols (avoid “failed to strip”)
             ndk {
                 debugSymbolLevel 'FULL'
             }
+
+            // Add this line ↓ to skip symbol stripping
+            packagingOptions {
+                doNotStrip "**/*.so"
+            }
+
         }
         debug {
             debuggable true

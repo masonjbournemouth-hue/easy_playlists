@@ -1,0 +1,11 @@
+org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
+org.gradle.daemon=false
+org.gradle.workers.max=2
+org.gradle.caching=true
+
+android.useAndroidX=true
+android.enableJetifier=false
+
+# Kotlin: avoid flaky external daemon
+kotlin.compiler.execution.strategy=in-process
+kotlin.daemon.enabled=false
