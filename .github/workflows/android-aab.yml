@@ -2,6 +2,15 @@ name: Android Play Bundle
 
 on:
   workflow_dispatch:
+    inputs:
+      track:
+        description: "Play track (internal, alpha, beta, production)"
+        required: false
+        default: "internal"
+      release_status:
+        description: "Release status (draft or completed)"
+        required: false
+        default: "completed"
   push:
     branches: [ main ]
     paths:
@@ -15,10 +24,24 @@ defaults:
     shell: bash
 
 jobs:
-  build:
+  build-and-upload:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+
     env:
+      # >>>> UPDATE THIS TO MATCH YOUR APP ID <<<<
+      PACKAGE_NAME: com.playlistcity.app
+
+      # Allow either your previous secret name or the new one:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      KEYSTORE_BASE64:         ${{ secrets.KEYSTORE_BASE64 }}
+
+      PLAY_TRACK: ${{ github.event.inputs.track || 'internal' }}
+      PLAY_RELEASE_STATUS: ${{ github.event.inputs.release_status || 'completed' }}
+
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
 
@@ -70,13 +93,34 @@ jobs:
             "ndk;27.0.12077973"
           echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
 
+      # --- Keystore + key.properties (supports either secret name) ---
       - name: Decode keystore from secrets
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           set -eux
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
-          ls -l android/app/release-keystore.jks
+          B64="${ANDROID_KEYSTORE_BASE64:-$KEYSTORE_BASE64}"
+          if [ -z "$B64" ]; then
+            echo "ERROR: No keystore base64 secret set. Use secrets.ANDROID_KEYSTORE_BASE64 or secrets.KEYSTORE_BASE64."
+            exit 1
+          fi
+          echo "$B64" | base64 -d > android/app/upload-keystore.jks
+          ls -l android/app/upload-keystore.jks
+
+      - name: Write key.properties (expected at android/key.properties)
+        run: |
+          set -eux
+          : "${ANDROID_KEYSTORE_PASSWORD:?Missing secret ANDROID_KEYSTORE_PASSWORD}"
+          : "${ANDROID_KEY_ALIAS:?Missing secret ANDROID_KEY_ALIAS}"
+          : "${ANDROID_KEY_PASSWORD:?Missing secret ANDROID_KEY_PASSWORD}"
+          cat > android/key.properties <<EOF
+          storePassword=${ANDROID_KEYSTORE_PASSWORD}
+          keyPassword=${ANDROID_KEY_PASSWORD}
+          keyAlias=${ANDROID_KEY_ALIAS}
+          storeFile=upload-keystore.jks
+          EOF
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS:         ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -94,7 +138,6 @@ jobs:
       - name: Write local.properties (sdk.dir + flutter.sdk)
         run: |
           set -eux
-          # Use the hostedtoolcache path where flutter-action installs Flutter.
           FLUTTER_SDK="/opt/hostedtoolcache/flutter/stable-3.32.8-x64"
           printf "sdk.dir=%s\nflutter.sdk=%s\n" "$ANDROID_SDK_ROOT" "$FLUTTER_SDK" > android/local.properties
           echo "----- android/local.properties -----"
@@ -104,53 +147,36 @@ jobs:
         run: flutter pub get
 
       # ---------- BUILD (Flutter) ----------
-      - name: Build AAB with Flutter (very verbose, never hide logs)
+      - name: Build AAB with Flutter (verbose)
         id: flutter_build
-        continue-on-error: true
         run: |
           set -eux
-          # Start fresh logs
-          : > flutter-info.log
-          # Run very verbose build; keep going to allow log upload on failure
-          (flutter build appbundle --release --no-shrink --no-tree-shake-icons -v 2>&1 | tee -a flutter-info.log) || echo "FLUTTER_BUILD_FAILED=1" > flutter_failed.flag
-          # Try to extract first real error for quick triage
-          awk '
-            /(^Unhandled exception:)|(^Error: )|(^lib\/.*:\d+:\d+:)|(^Target )|(^\* Error)|(^ERROR:)/{seen=1}
-            seen{print}
-          ' flutter-info.log | head -n 200 > first-error.txt || true
+          flutter build appbundle --release --no-shrink --no-tree-shake-icons -v
 
-      # ---------- BUILD (Gradle compile to generate Problems report) ----------
-      - name: Build AAB with Gradle (verbose, stacktrace)
-        id: gradle_build
-        continue-on-error: true
+      # Verify the AAB is signed before upload (fail fast if not signed)
+      - name: Verify AAB is signed
         run: |
           set -eux
-          # Only run the Gradle compile task to generate the Problems report and capture Java-side issues
-          (cd android && ./gradlew :app:compileFlutterBuildRelease --stacktrace --warning-mode all 2>&1 | tee -a ../gradle-info.log) || true
-          # Upload the problems report if it exists
-          if [ -f build/reports/problems/problems-report.html ]; then
-            mkdir -p artifacts
-            cp build/reports/problems/problems-report.html artifacts/ || true
-          fi
+          jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
 
-      - name: Upload logs and reports (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs-and-report
-          path: |
-            flutter-info.log
-            gradle-info.log
-            first-error.txt
-            artifacts/**
-          if-no-files-found: ignore
-
+      # Optional: Upload build logs/artifacts (kept from your original file)
       - name: Upload bundle artifact
-        if: ${{ steps.flutter_build.outcome == 'success' && !cancelled() }}
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
           path: |
             build/app/outputs/bundle/release/app-release.aab
             android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
+          if-no-files-found: warn
+
+      # ---------- UPLOAD TO GOOGLE PLAY INTERNAL TESTING ----------
+      - name: Upload to Google Play – Internal testing
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ env.PACKAGE_NAME }}
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          track: ${{ env.PLAY_TRACK }}
+          status: ${{ env.PLAY_RELEASE_STATUS }}
+          whatsNewDirectory: fastlane/metadata/android
