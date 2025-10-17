@@ -69,10 +69,20 @@ jobs:
           set -eux
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
           cd "$ANDROID_SDK_ROOT/cmdline-tools"
-          curl -sSL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
-          unzip -q tools.zip -d latest
-          rm -f tools.zip
+          curl -sSL -o commandlinetools.zip https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
+          unzip -q commandlinetools.zip
+          rm -f commandlinetools.zip
+          # The zip contains a top-level 'cmdline-tools/' directory.
+          # Move it to 'latest/' so the final path is .../cmdline-tools/latest/bin
+          rm -rf latest || true
+          mv cmdline-tools latest
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+      - name: Check Android tools on PATH
+        run: |
+          set -eux
+          which sdkmanager
+          sdkmanager --version
 
       - name: Accept SDK licenses (non-interactive)
         run: |
