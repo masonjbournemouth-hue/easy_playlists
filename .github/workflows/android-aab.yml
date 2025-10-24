@@ -156,12 +156,20 @@ jobs:
       - name: flutter pub get
         run: flutter pub get
 
-      # ---------- BUILD (Flutter) ----------
-      - name: Build AAB with Flutter (verbose)
-        id: flutter_build
+      - name: Auto bump versionCode (+N) in pubspec.yaml
         run: |
           set -eux
-          flutter build appbundle --release --no-shrink --no-tree-shake-icons -v
+          current=$(grep '^version:' pubspec.yaml | sed 's/.*+//')
+          next=$((current + 1))
+          sed -i "s/+.*/+${next}/" pubspec.yaml
+          echo "✅ Bumped versionCode from +${current} to +${next}"
+          grep '^version:' pubspec.yaml
+
+      # ---------- BUILD (Flutter) ----------
+      - name: Build AAB with Flutter (release, obfuscate)
+        run: |
+          set -eux
+          flutter build appbundle --release --obfuscate --split-debug-info=build/symbols
 
       # Verify the AAB is signed before upload (fail fast if not signed)
       - name: Verify AAB is signed
