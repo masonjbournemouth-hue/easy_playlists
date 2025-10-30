@@ -5,24 +5,35 @@ plugins {
     id 'dev.flutter.flutter-gradle-plugin'
 }
 
+// --- Read version info from pubspec.yaml (via local.properties) ---
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { stream -> localProperties.load(stream) }
+}
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) flutterVersionCode = '1'
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) flutterVersionName = '1.0'
+
 android {
     namespace "com.playlistcity.app"
-
     compileSdk 35
 
     defaultConfig {
         applicationId "com.playlistcity.app"
         minSdk 21
         targetSdk flutter.targetSdkVersion
-        // BUMP this to a new integer each upload:
-        versionCode 3
-        versionName "2.3"
+
+        // ✅ Automatically pulled from pubspec.yaml
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
     }
 
     signingConfigs {
-	release {
+        release {
             def keystoreProperties = new Properties()
-            def keystoreFile = rootProject.file("key.properties")
+            def keystoreFile = rootProject.file("android/key.properties")
             if (keystoreFile.exists()) {
                 keystoreProperties.load(new FileInputStream(keystoreFile))
                 storeFile file(keystoreProperties["storeFile"])
@@ -30,7 +41,7 @@ android {
                 keyAlias keystoreProperties["keyAlias"]
                 keyPassword keystoreProperties["keyPassword"]
             } else {
-                println("⚠️ Warning: key.properties not found, skipping local signing")
+                println("⚠️ Warning: android/key.properties not found, skipping local signing")
             }
         }
     }
@@ -40,6 +51,7 @@ android {
             if (signingConfigs.release.storeFile != null) {
                 signingConfig signingConfigs.release
             }
+
             // Disable shrinking/obfuscation for CI simplicity
             minifyEnabled false
             shrinkResources false
@@ -49,12 +61,12 @@ android {
                 debugSymbolLevel 'FULL'
             }
 
-            // Add this line ↓ to skip symbol stripping
+            // Skip symbol stripping (safe for Play uploads)
             packagingOptions {
                 doNotStrip "**/*.so"
             }
-
         }
+
         debug {
             debuggable true
         }
@@ -83,4 +95,3 @@ android {
 dependencies {
     implementation 'androidx.multidex:multidex:2.0.1'
 }
-

@@ -2,7 +2,7 @@ name: playlist_city
 description: A Flutter app for creating and saving music playlists
 publish_to: 'none'
 
-version: 1.0.1+4
+version: 1.0.2+4
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

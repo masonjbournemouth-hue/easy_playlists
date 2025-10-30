@@ -1,80 +1,53 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
-import 'theme/app_theme.dart';
-import 'theme/theme_controller.dart';
-import 'screens/settings_screen.dart';
+import 'package:playlist_city/state/playlist_state.dart';
+import 'package:playlist_city/theme/theme_controller.dart';
+import 'package:playlist_city/theme/app_theme.dart'; // <-- add this
+import 'package:playlist_city/screens/home_page.dart';
+import 'package:playlist_city/screens/import_page.dart';
+import 'package:playlist_city/screens/editor_page.dart';
+import 'package:playlist_city/screens/player_page.dart';
+import 'package:playlist_city/screens/export_page.dart';
+import 'package:playlist_city/screens/settings_screen.dart';
+import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   final themeController = ThemeController();
-  await themeController.load();
+  await themeController.init();
 
-  runApp(PlaylistCityApp(themeController: themeController));
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => PlaylistState()..init()),
+        ChangeNotifierProvider(create: (_) => themeController),
+      ],
+      child: const App(),
+    ),
+  );
 }
 
-class PlaylistCityApp extends StatefulWidget {
-  final ThemeController themeController;
-  const PlaylistCityApp({super.key, required this.themeController});
-
-  @override
-  State<PlaylistCityApp> createState() => _PlaylistCityAppState();
-}
-
-class _PlaylistCityAppState extends State<PlaylistCityApp> {
-  @override
-  void initState() {
-    super.initState();
-    widget.themeController.addListener(_onThemeChanged);
-  }
-
-  @override
-  void dispose() {
-    widget.themeController.removeListener(_onThemeChanged);
-    super.dispose();
-  }
-
-  void _onThemeChanged() => setState(() {});
+class App extends StatelessWidget {
+  const App({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final themeController = context.watch<ThemeController>();
+
     return MaterialApp(
       title: 'Playlist City',
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: widget.themeController.themeMode,
-      home: HomeScreen(themeController: widget.themeController),
-    );
-  }
-}
-
-class HomeScreen extends StatelessWidget {
-  final ThemeController themeController;
-  const HomeScreen({super.key, required this.themeController});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Playlist City'),
-        actions: [
-          IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => SettingsScreen(controller: themeController),
-              ));
-            },
-          ),
-        ],
-      ),
-      body: const Center(
-        child: Text(
-          'Welcome to Playlist City',
-          textAlign: TextAlign.center,
-        ),
-      ),
+      debugShowCheckedModeBanner: false,
+      themeMode: themeController.mode,
+      theme: AppTheme.light(),   // <-- use centralized theme
+      darkTheme: AppTheme.dark(),// <-- "
+      initialRoute: '/home',
+      routes: {
+        '/home': (_) => const HomePage(),
+        '/import': (_) => const ImportPage(),
+        '/editor': (_) => const EditorPage(),
+        '/player': (_) => const PlayerPage(),
+        '/export': (_) => const ExportPage(),
+        '/settings': (_) => const SettingsScreen(),
+      },
     );
   }
 }
