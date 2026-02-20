@@ -1,7 +1,3 @@
----
-layout: default
-title: Privacy Policy
----
 
 
 **Privacy Policy for Playlist City**
