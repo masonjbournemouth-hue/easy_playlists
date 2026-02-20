@@ -5,7 +5,7 @@
 Effective Date: February 2026
 
 Playlist City respects your privacy. This app is designed to let you create and enjoy playlists from the music stored on your own device.
-
+<br>
 
 **Information We Collect**
 
