@@ -1,6 +1,6 @@
 
 
-**Privacy Policy for Playlist City**
+<b> Privacy Policy for Playlist City</b> 
 
 Effective Date: February 2026
 
