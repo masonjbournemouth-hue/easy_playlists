@@ -2,7 +2,6 @@
 
 PRIVACY POLICY FOR PLAYLIST CITY
 
-Effective Date: February 2026
 Playlist City respects your privacy. This app is designed to let you create and enjoy playlists from the music stored on your own device.
 
 
@@ -30,3 +29,6 @@ CONTACT US
 
 If you have any questions about this Privacy Policy, please contact us at:
 📧 PlaylistCity@outlook.com
+
+
+Effective Date: February 2026
